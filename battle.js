@@ -185,38 +185,58 @@ async function batPlayCard(uid) {
 function batCancelTargeting() { BAT.phase = BAT.prevPhase; BAT.pendingSpell = null; BAT.pendingAbility = null; BAT.isProcessing = false; uiRenderBattle(); }
 
 async function batSelectTarget(targetObj) {
-    if(BAT.phase !== 'TARGETING' || BAT.isProcessing) return; BAT.isProcessing = true; uiRenderBattle(); 
-    let effectStr = BAT.pendingSpell ? BAT.player.hand.find(c=>c.uid===BAT.pendingSpell).effect : BAT.player.creatures.find(c=>c.uid===BAT.pendingAbility).activated.effect;
-    let targetRule = effectStr.split('_')[1]; 
-    if (targetRule === 'cr' && targetObj.type !== 'creature') { uiShowMsg("クリーチャー専用"); BAT.isProcessing = false; uiRenderBattle(); return; }
-    if (targetRule === 'p' && targetObj.type !== 'player') { uiShowMsg("プレイヤー専用"); BAT.isProcessing = false; uiRenderBattle(); return; }
+    if (BAT.phase !== 'TARGETING' || BAT.isProcessing) return;
+    BAT.isProcessing = true; uiRenderBattle();
+
+    try {
+        if (BAT.pendingSpell) {
+            await batPayAndResolve(BAT.pendingSpell, targetObj, false);
+        } else if (BAT.pendingAbility) {
+            await batResolveAbility(BAT.pendingAbility, targetObj, false);
+        }
+    } catch (e) {
+        console.error("ターゲット解決中にエラーが発生しました:", e);
+        uiShowMsg("エラー発生: 処理を中断します");
+    }
     
-    if (BAT.pendingSpell) await batPayAndResolve(BAT.pendingSpell, targetObj); else await batResolveAbility(BAT.pendingAbility, targetObj);
+    // 万が一エラーが起きても、フリーズさせずに操作可能な状態に戻す安全装置
+    if (BAT.phase === 'TARGETING') {
+        BAT.phase = BAT.prevPhase;
+        BAT.pendingSpell = null;
+        BAT.pendingAbility = null;
+    }
+    BAT.isProcessing = false;
+    uiRenderBattle();
 }
 
 // 【battle.js 置き換え箇所②：batPayAndResolve 関数】
 
 async function batPayAndResolve(uid, targetObj, isCpuCast = false) {
     let playerObj = isCpuCast ? BAT.cpu : BAT.player; let oppObj = isCpuCast ? BAT.player : BAT.cpu;
-    let handIdx = playerObj.hand.findIndex(c => c.uid === uid); let card = playerObj.hand[handIdx];
+    let handIdx = playerObj.hand.findIndex(c => c.uid === uid); 
+    if (handIdx === -1) return; // エラー防止
+    let card = playerObj.hand[handIdx];
 
     if(card.type !== 'LAND') {
         await uiShowCastSequence(card, targetObj);
     }
     
-    if(card.type === 'LAND') { playerObj.landPlayed = true; playerObj.lands.push(card); } 
-    else {
+    // ▼ 修正：バグを防ぐため、効果を発動する「前」に手札から消す ▼
+    playerObj.hand.splice(handIdx, 1); 
+    
+    if(card.type === 'LAND') { 
+        playerObj.landPlayed = true; playerObj.lands.push(card); 
+    } else {
         batPayMana(card, playerObj);
         
         if(card.type === 'CREATURE') { 
             card.sickness = !card.haste; playerObj.creatures.push(card); uiRenderBattle(); await sleep(300);
-            // ▼ 修正：選んだ targetObj を triggerETB に引き渡す ▼
             await AbilityManager.triggerETB(card, playerObj, oppObj, targetObj); 
         } else if(card.type === 'SPELL') { 
             await MagicEngine.resolve(card.effect, playerObj, oppObj, targetObj); 
         }
     }
-    playerObj.hand.splice(handIdx, 1); 
+    
     if(!isCpuCast && BAT.phase === 'TARGETING') { BAT.phase = BAT.prevPhase; BAT.pendingSpell = null; }
     await batCheckAndCleanDead(); if (!isCpuCast && BAT.active) BAT.isProcessing = false; uiRenderBattle(); 
 }

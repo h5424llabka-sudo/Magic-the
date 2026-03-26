@@ -51,26 +51,29 @@ const MagicEngine = {
         else if(tCr) { tCr.damage += 999; uiShowMsg(`💀 破壊！`); }
     },
     bounce: async (rule, v1, v2, p, opp, tCr) => {
-        // ▼ 追加：ステータスをデータベースの初期値に戻す補助関数 ▼
         let resetCard = (c) => {
             let base = DB_CARDS[c.idKey];
-            c.power = base.power; 
-            c.toughness = base.toughness;
-            c.damage = 0; 
-            c.tapped = false; 
-            c.sickness = false;
-            c.abilities = [...(base.abilities || [])]; // キーワード能力もリセット
+            if (base) { // トークンなどで元データがない場合のエラー回避
+                c.power = base.power; 
+                c.toughness = base.toughness;
+                c.abilities = [...(base.abilities || [])]; 
+            }
+            c.damage = 0; c.tapped = false; c.sickness = false;
             return c;
         };
         
         if(rule === 'allcr') {
-            p.creatures.forEach(c => { p.hand.push(resetCard(c)); }); 
-            opp.creatures.forEach(c => { opp.hand.push(resetCard(c)); });
+            p.creatures.forEach(c => { if(DB_CARDS[c.idKey]) p.hand.push(resetCard(c)); }); 
+            opp.creatures.forEach(c => { if(DB_CARDS[c.idKey]) opp.hand.push(resetCard(c)); });
             p.creatures = []; opp.creatures = []; uiShowMsg(`🌊 全バウンス！`);
         } else if(tCr) {
-            resetCard(tCr); // 対象をリセット
-            if(p.creatures.includes(tCr)) { p.creatures = p.creatures.filter(c=>c.uid!==tCr.uid); p.hand.push(tCr); }
-            else { opp.creatures = opp.creatures.filter(c=>c.uid!==tCr.uid); opp.hand.push(tCr); }
+            if(p.creatures.includes(tCr)) { 
+                p.creatures = p.creatures.filter(c=>c.uid!==tCr.uid); 
+                if(DB_CARDS[tCr.idKey]) p.hand.push(resetCard(tCr)); // トークンは手札に戻らず消滅する（MTGルール）
+            } else { 
+                opp.creatures = opp.creatures.filter(c=>c.uid!==tCr.uid); 
+                if(DB_CARDS[tCr.idKey]) opp.hand.push(resetCard(tCr)); 
+            }
             uiShowMsg(`🌊 手札に戻した！`);
         }
     },

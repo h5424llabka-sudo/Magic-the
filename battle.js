@@ -54,7 +54,8 @@ function batFindCard(uid) { return BAT.player.hand.find(c=>c.uid===uid) || BAT.p
 function batStart(cpuId) {
     // ▼ 修正：現在選択しているデッキを参照する ▼
     let currentDeck = SYS.decks[SYS.currentDeckIndex];
-    if(currentDeck.length < 10) { uiShowMsg("デッキ枚数不足"); return; }
+// ▼ 修正：40枚未満は出撃不可に ▼
+    if(currentDeck.length < 40) { uiShowMsg("デッキが40枚未満です！"); return; }
     
     let cpuData = DB_CPU.find(c => c.id === cpuId); BAT.cpu.id = cpuId; BAT.cpu.reward = cpuData.reward;
     
@@ -407,8 +408,8 @@ function batEndGame(isWin) {
         sysSaveData();
     } else { 
         document.getElementById('res-title').innerText = "敗北..."; 
-        document.getElementById('res-reward').innerText = "+10 G (参加賞)"; 
-        SYS.gold += 10; 
+        document.getElementById('res-reward').innerText = "+0 G"; 
+        // 参加賞の10G追加処理を削除しました
         sysSaveData();
     } 
     m.style.display = 'flex'; 

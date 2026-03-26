@@ -79,13 +79,27 @@ function sysSaveDeck() {
 }
 // （※この下にある sysRemoveFromDeck や sysAddToDeck はそのまま残してください）
 
-function sysRemoveFromDeck(index) {
-    let id = editDeck[index]; editDeck.splice(index, 1);
-    if (DB_CARDS[id].type !== 'LAND') editPool[id] = (editPool[id] || 0) + 1; 
-    uiRenderDeck();
+function sysRemoveFromDeck(idKey) {
+    let idx = editDeck.indexOf(idKey);
+    if (idx !== -1) {
+        editDeck.splice(idx, 1);
+        editPool[idKey] = (editPool[idKey] || 0) + 1;
+        uiRenderDeck();
+    }
 }
 
-function sysAddToDeck(id) {
-    if (editDeck.length >= 30) { uiShowMsg("最大30枚です"); return; }
-    if (editPool[id] > 0) { if (DB_CARDS[id].type !== 'LAND') editPool[id]--; editDeck.push(id); uiRenderDeck(); }
+function sysAddToDeck(idKey) {
+    if (editDeck.length >= 40) { uiShowMsg("デッキは40枚までです！"); return; }
+    
+    // ▼ 追加：同名カードは4枚まで（MTGルール） ▼
+    let countInDeck = editDeck.filter(id => id === idKey).length;
+    if (DB_CARDS[idKey].type !== 'LAND' && countInDeck >= 4) {
+        uiShowMsg("同名カードは4枚までです！"); return;
+    }
+
+    if (editPool[idKey] > 0) {
+        editDeck.push(idKey);
+        editPool[idKey]--;
+        uiRenderDeck();
+    }
 }

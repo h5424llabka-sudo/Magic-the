@@ -135,9 +135,9 @@ function uiShowModal(card, context, uid, uniqueParam) {
     if(BAT.active && BAT.turn === 'PLAYER' && (BAT.phase === 'MAIN1' || BAT.phase === 'MAIN2') && !BAT.isProcessing) {
         if(context === 'hand') actionDiv.innerHTML = `<button class="btn btn-play" onclick="batPlayCard(${uid}); uiCloseModal()">✨ プレイする</button>`;
         else if(context === 'field' && card.activated && card.damage < card.toughness) actionDiv.innerHTML = `<button class="btn btn-gold" onclick="batActivateAbility(${uid}); uiCloseModal()">⚡ 能力を使う</button>`;
-    } else if (context === 'deck_active') actionDiv.innerHTML = `<button class="btn btn-red" onclick="sysRemoveFromDeck(${uniqueParam}); uiCloseModal()">デッキから外す</button>`; 
+    } else if (context === 'deck_active') actionDiv.innerHTML = `<button class="btn btn-red" onclick="sysRemoveFromDeck('${card.idKey}'); uiCloseModal()">デッキから外す</button>`; 
     else if (context === 'deck_pool') actionDiv.innerHTML = `<button class="btn btn-green" onclick="sysAddToDeck('${card.idKey}'); uiCloseModal()">デッキに入れる</button>`;
-}
+} // <-- uiShowModal の閉じカッコ
 
 function uiCloseModal(e) { if(e) e.stopPropagation(); document.getElementById('modal-card').style.display = 'none'; }
 
@@ -227,44 +227,40 @@ function uiRenderShopMenu() {
 function uiRenderShopResult(resultIds) { document.getElementById('shop-gold').innerText = SYS.gold; document.getElementById('gacha-result').innerHTML = resultIds.map(id => uiGenCardHTML(DB_CARDS[id], 'shop')).join(''); }
 
 function uiRenderDeck() {
+    let dEl = document.getElementById('deck-active');
+    let pEl = document.getElementById('deck-pool');
     document.getElementById('deck-count').innerText = editDeck.length;
-    
-    const colors = ['fire', 'forest', 'water', 'light', 'dark'];
-    const colorNames = { 'fire': '🔥 火属性', 'forest': '🌲 森属性', 'water': '💧 水属性', 'light': '✨ 光属性', 'dark': '🌑 闇属性' };
 
-    const sortCards = (a, b) => {
-        let ca = DB_CARDS[a], cb = DB_CARDS[b];
-        if (ca.cost !== cb.cost) return ca.cost - cb.cost;
-        return ca.name.localeCompare(cb.name);
-    };
+    // ▼ カードを種類ごとに集計 ▼
+    let deckCounts = {};
+    editDeck.forEach(id => deckCounts[id] = (deckCounts[id] || 0) + 1);
 
-    let activeHtml = '';
-    let deckWithIdx = editDeck.map((id, idx) => ({id, idx}));
-    deckWithIdx.sort((a, b) => sortCards(a.id, b.id)); 
+    // コスト順に並び替え
+    let sortFunc = (a, b) => (DB_CARDS[a].cost || 0) - (DB_CARDS[b].cost || 0);
     
-    colors.forEach(col => {
-        let items = deckWithIdx.filter(item => DB_CARDS[item.id].color === col);
-        if(items.length > 0) {
-            activeHtml += `<div style="width:100%; padding: 4px 8px; background:rgba(255,255,255,0.1); margin:10px 0 5px 0; font-weight:bold; font-size:0.9rem; border-left: 4px solid ${RARITY_COLORS['R']};">${colorNames[col]}</div>`;
-            activeHtml += `<div class="deck-grid" style="justify-content:flex-start; margin-bottom:10px;">` + items.map(item => uiGenCardHTML(DB_CARDS[item.id], 'deck_active', false, item.idx)).join('') + `</div>`;
-        }
+    // 1. デッキの描画（スタック表示）
+    let uniqueDeckIds = Object.keys(deckCounts).sort(sortFunc);
+    let dHtml = '';
+    uniqueDeckIds.forEach(id => {
+        let cardHtml = uiGenCardHTML(DB_CARDS[id], 'deck_active', false);
+        dHtml += `<div style="position:relative; display:inline-block; margin: 4px;">
+                    ${cardHtml}
+                    <div style="position:absolute; top:-8px; right:-8px; background:#e03131; color:white; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; font-size:0.9rem; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×${deckCounts[id]}</div>
+                  </div>`;
     });
-    document.getElementById('deck-active').innerHTML = activeHtml;
+    dEl.innerHTML = dHtml;
 
-    let poolHtml = '';
-    let poolIds = Object.keys(editPool).filter(id => editPool[id] > 0);
-    poolIds.sort(sortCards); 
-    
-    colors.forEach(col => {
-        let items = poolIds.filter(id => DB_CARDS[id].color === col);
-        if(items.length > 0) {
-            poolHtml += `<div style="width:100%; padding: 4px 8px; background:rgba(255,255,255,0.1); margin:10px 0 5px 0; font-weight:bold; font-size:0.9rem; border-left: 4px solid ${RARITY_COLORS['R']};">${colorNames[col]}</div>`;
-            poolHtml += `<div class="deck-grid" style="justify-content:flex-start; margin-bottom:10px;">` + items.map(id => {
-                return `<div style="display:flex; flex-direction:column; align-items:center; margin-bottom:10px;">` + uiGenCardHTML(DB_CARDS[id], 'deck_pool') + `<span style="font-size:0.75rem; margin-top:3px; font-weight:bold; color:#aaa;">所持: ${editPool[id]==99?'∞':editPool[id]}</span></div>`;
-            }).join('') + `</div>`;
-        }
+    // 2. 所持プールの描画（スタック表示）
+    let uniquePoolIds = Object.keys(editPool).filter(id => editPool[id] > 0).sort(sortFunc);
+    let pHtml = '';
+    uniquePoolIds.forEach(id => {
+        let cardHtml = uiGenCardHTML(DB_CARDS[id], 'deck_pool', false);
+        pHtml += `<div style="position:relative; display:inline-block; margin: 4px;">
+                    ${cardHtml}
+                    <div style="position:absolute; top:-8px; right:-8px; background:#1c7ed6; color:white; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; font-size:0.9rem; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×${editPool[id]}</div>
+                  </div>`;
     });
-    document.getElementById('deck-pool').innerHTML = poolHtml;
+    pEl.innerHTML = pHtml;
 }
 
 const PHASE_JP = { 'UNTAP':'アンタップ', 'DRAW':'ドロー', 'MAIN1':'メイン1', 'TARGETING':'【対象を選択】', 'ATTACK':'攻撃', 'BLOCK':'防御', 'ORDER_BLOCKERS':'【順番決定】', 'MAIN2':'メイン2', 'END':'終了' };

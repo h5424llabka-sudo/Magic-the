@@ -158,6 +158,8 @@ async function batResolveAbility(uid, targetObj, isCpuCast = false) {
     await batCheckAndCleanDead(); if (!isCpuCast && BAT.active) BAT.isProcessing = false; uiRenderBattle();
 }
 
+// 【battle.js 置き換え箇所①：batPlayCard 関数】
+
 async function batPlayCard(uid) {
     if (BAT.isProcessing) return; BAT.isProcessing = true; uiRenderBattle(); 
     uiCloseModal(); let card = BAT.player.hand.find(c => c.uid === uid);
@@ -166,10 +168,13 @@ async function batPlayCard(uid) {
         if(BAT.player.landPlayed) { uiShowMsg("土地は1ターン1枚"); BAT.isProcessing = false; uiRenderBattle(); return; }
         await batPayAndResolve(uid, null);
     } else {
-        // ▼ 変更箇所：マナ判定 ▼
         if(!batCanPayMana(card, BAT.player)) { uiShowMsg(`マナ（または ${ATTR_JP[card.color]} の色マナ）が足りません`); BAT.isProcessing = false; uiRenderBattle(); return; }
         
-        if(card.type === 'SPELL' && ['any', 'cr', 'p'].includes(card.effect.split('_')[1])) {
+        // ▼ 修正：呪文だけでなく、対象を取るETBを持つクリーチャーもターゲット選択フェイズへ移行させる ▼
+        let isTargetingSpell = card.type === 'SPELL' && ['any', 'cr', 'p'].includes(card.effect.split('_')[1]);
+        let isTargetingETB = card.type === 'CREATURE' && card.triggered && card.triggered.condition === 'etb' && ['any', 'cr', 'p'].includes(card.triggered.effect.split('_')[1]);
+        
+        if(isTargetingSpell || isTargetingETB) {
             BAT.prevPhase = BAT.phase; BAT.phase = 'TARGETING'; BAT.pendingSpell = uid; BAT.isProcessing = false; uiRenderBattle(); uiShowMsg("対象を選択"); return;
         }
         await batPayAndResolve(uid, null);
@@ -188,22 +193,24 @@ async function batSelectTarget(targetObj) {
     if (BAT.pendingSpell) await batPayAndResolve(BAT.pendingSpell, targetObj); else await batResolveAbility(BAT.pendingAbility, targetObj);
 }
 
+// 【battle.js 置き換え箇所②：batPayAndResolve 関数】
+
 async function batPayAndResolve(uid, targetObj, isCpuCast = false) {
     let playerObj = isCpuCast ? BAT.cpu : BAT.player; let oppObj = isCpuCast ? BAT.player : BAT.cpu;
     let handIdx = playerObj.hand.findIndex(c => c.uid === uid); let card = playerObj.hand[handIdx];
 
-    // ▼ 追加：プレイ演出（土地以外の場合にカットインを表示） ▼
     if(card.type !== 'LAND') {
         await uiShowCastSequence(card, targetObj);
     }
     
     if(card.type === 'LAND') { playerObj.landPlayed = true; playerObj.lands.push(card); } 
     else {
-        batPayMana(card, playerObj); // マナ支払い
+        batPayMana(card, playerObj);
         
         if(card.type === 'CREATURE') { 
             card.sickness = !card.haste; playerObj.creatures.push(card); uiRenderBattle(); await sleep(300);
-            await AbilityManager.triggerETB(card, playerObj, oppObj); 
+            // ▼ 修正：選んだ targetObj を triggerETB に引き渡す ▼
+            await AbilityManager.triggerETB(card, playerObj, oppObj, targetObj); 
         } else if(card.type === 'SPELL') { 
             await MagicEngine.resolve(card.effect, playerObj, oppObj, targetObj); 
         }
@@ -287,22 +294,32 @@ function batCpuAutoBlock() {
     });
 }
 
+// 【battle.js 置き換え箇所③：playCpuMainPhase 関数】
+
 async function playCpuMainPhase() {
     let lIdx = BAT.cpu.hand.findIndex(c=>c.type==='LAND'); if(lIdx >= 0 && !BAT.cpu.landPlayed) { BAT.cpu.lands.push(BAT.cpu.hand[lIdx]); BAT.cpu.hand.splice(lIdx,1); BAT.cpu.landPlayed = true;}
     for(let i=BAT.cpu.hand.length-1; i>=0; i--) {
         let c = BAT.cpu.hand[i];
-        // ▼ 変更箇所：CPUのマナ判定 ▼
         if(c.type!=='LAND' && batCanPayMana(c, BAT.cpu)) {
             let targetObj = null;
-            if (c.type === 'SPELL') {
-                let rule = c.effect.split('_')[1];
-                if (c.effect.startsWith('buff') || c.effect.startsWith('heal')) {
-                    if (['any', 'cr'].includes(rule)) { let bt = [...BAT.cpu.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'cpu' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'cpu' };
-                } else {
-                    if (['any', 'cr'].includes(rule)) { let bt = [...BAT.player.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'player' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'player' };
+            // ▼ 修正：CPUがETB能力のターゲットも自動選択できるように変更 ▼
+            let effectStr = c.type === 'SPELL' ? c.effect : (c.type === 'CREATURE' && c.triggered && c.triggered.condition === 'etb' ? c.triggered.effect : null);
+            
+            if (effectStr) {
+                let rule = effectStr.split('_')[1];
+                if (['any', 'cr', 'p'].includes(rule)) {
+                    if (effectStr.startsWith('buff') || effectStr.startsWith('heal')) {
+                        if (['any', 'cr'].includes(rule)) { let bt = [...BAT.cpu.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'cpu' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'cpu' };
+                    } else {
+                        if (['any', 'cr'].includes(rule)) { let bt = [...BAT.player.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'player' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'player' };
+                    }
                 }
             }
-            if(c.type !== 'SPELL' || targetObj || !['any', 'cr', 'p'].includes(c.effect.split('_')[1])) { await batPayAndResolve(c.uid, targetObj, true); await sleep(500); }
+            
+            let rule = effectStr ? effectStr.split('_')[1] : null;
+            if(!effectStr || targetObj || !['any', 'cr', 'p'].includes(rule)) { 
+                await batPayAndResolve(c.uid, targetObj, true); await sleep(500); 
+            }
         }
     }
 }

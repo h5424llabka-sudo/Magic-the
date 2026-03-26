@@ -101,11 +101,14 @@ const MagicEngine = {
 // 【effects.js 置き換え箇所：AbilityManager】
 
 const AbilityManager = {
+// 【effects.js 置き換え箇所：AbilityManager の triggerETB】
+
     // 場に出たとき (Enter The Battlefield)
-    async triggerETB(card, playerObj, oppObj) {
+    async triggerETB(card, playerObj, oppObj, targetObj = null) {
         if (card.triggered && card.triggered.condition === 'etb') {
             uiShowMsg(`✨ ${card.name}の登場時能力！`, 1500);
-            await MagicEngine.resolve(card.triggered.effect, playerObj, oppObj, null, card);
+            // ▼ 修正：targetObj を resolve 関数に渡す ▼
+            await MagicEngine.resolve(card.triggered.effect, playerObj, oppObj, targetObj, card);
         }
     },
     // 死亡したとき

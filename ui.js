@@ -226,39 +226,76 @@ function uiRenderShopMenu() {
 
 function uiRenderShopResult(resultIds) { document.getElementById('shop-gold').innerText = SYS.gold; document.getElementById('gacha-result').innerHTML = resultIds.map(id => uiGenCardHTML(DB_CARDS[id], 'shop')).join(''); }
 
+// 【ui.js 置き換え箇所：uiRenderDeck 関数とその周辺】
+
+// ▼ 追加：属性ごとの表示・非表示を記憶する状態変数 ▼
+let uiDeckPoolFilter = { fire: true, forest: true, water: true, light: true, dark: true };
+
+// ▼ 追加：見出しをクリックしたときに表示を切り替える関数 ▼
+function uiTogglePool(color) {
+    uiDeckPoolFilter[color] = !uiDeckPoolFilter[color];
+    uiRenderDeck();
+}
+
 function uiRenderDeck() {
     let dEl = document.getElementById('deck-active');
     let pEl = document.getElementById('deck-pool');
     document.getElementById('deck-count').innerText = editDeck.length;
 
-    // ▼ カードを種類ごとに集計 ▼
     let deckCounts = {};
     editDeck.forEach(id => deckCounts[id] = (deckCounts[id] || 0) + 1);
 
     // コスト順に並び替え
     let sortFunc = (a, b) => (DB_CARDS[a].cost || 0) - (DB_CARDS[b].cost || 0);
+    const ATTR_COLORS = { 'fire':'#e03131', 'forest':'#2b8a3e', 'water':'#1c7ed6', 'light':'#fcc419', 'dark':'#6741d9' };
     
-    // 1. デッキの描画（スタック表示）
+    // 1. デッキの描画（変更なし・バッジの色だけ属性カラーに対応）
     let uniqueDeckIds = Object.keys(deckCounts).sort(sortFunc);
     let dHtml = '';
     uniqueDeckIds.forEach(id => {
+        let col = DB_CARDS[id].color;
+        let badgeBg = ATTR_COLORS[col] || '#555';
+        let badgeCol = col === 'light' ? 'black' : 'white'; // 光属性だけ文字を黒にして見やすく
         let cardHtml = uiGenCardHTML(DB_CARDS[id], 'deck_active', false);
         dHtml += `<div style="position:relative; display:inline-block; margin: 4px;">
                     ${cardHtml}
-                    <div style="position:absolute; top:-8px; right:-8px; background:#e03131; color:white; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; font-size:0.9rem; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×${deckCounts[id]}</div>
+                    <div style="position:absolute; top:-8px; right:-8px; background:${badgeBg}; color:${badgeCol}; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; font-size:0.9rem; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×${deckCounts[id]}</div>
                   </div>`;
     });
     dEl.innerHTML = dHtml;
 
-    // 2. 所持プールの描画（スタック表示）
+    // 2. 所持プールの描画（属性ごとのグループ化＆折りたたみ機能）
     let uniquePoolIds = Object.keys(editPool).filter(id => editPool[id] > 0).sort(sortFunc);
     let pHtml = '';
-    uniquePoolIds.forEach(id => {
-        let cardHtml = uiGenCardHTML(DB_CARDS[id], 'deck_pool', false);
-        pHtml += `<div style="position:relative; display:inline-block; margin: 4px;">
-                    ${cardHtml}
-                    <div style="position:absolute; top:-8px; right:-8px; background:#1c7ed6; color:white; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; font-size:0.9rem; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×${editPool[id]}</div>
+    const colors = ['fire', 'forest', 'water', 'light', 'dark'];
+    const ATTR_NAMES = { 'fire':'🔥 火属性', 'forest':'🌲 森属性', 'water':'💧 水属性', 'light':'✨ 光属性', 'dark':'🌑 闇属性' };
+
+    colors.forEach(col => {
+        // その属性のカードだけを抽出
+        let cardsInColor = uniquePoolIds.filter(id => DB_CARDS[id].color === col);
+        if(cardsInColor.length === 0) return; // 持っていない属性の見出しは表示しない
+
+        let isVisible = uiDeckPoolFilter[col];
+        let arrow = isVisible ? '▼' : '▶';
+        
+        // ▼ 開閉できる見出し（クリックで uiTogglePool を呼ぶ） ▼
+        pHtml += `<div style="background:#333; color:white; padding:8px 15px; margin-top:10px; cursor:pointer; border-radius: 5px; border-left: 5px solid ${ATTR_COLORS[col]}; font-weight: bold;" onclick="uiTogglePool('${col}')">
+                    ${arrow} ${ATTR_NAMES[col]} <span style="font-size: 0.8em; color: #ccc; margin-left: 10px;">(全 ${cardsInColor.length} 種類)</span>
                   </div>`;
+        
+        // ▼ カード一覧（isVisible が true のときだけ中身を描画） ▼
+        if (isVisible) {
+            pHtml += `<div style="padding: 10px 5px; display:flex; flex-wrap:wrap; background:#1a1a1a; border-radius: 0 0 5px 5px; margin-bottom: 10px;">`;
+            cardsInColor.forEach(id => {
+                let badgeCol = col === 'light' ? 'black' : 'white';
+                let cardHtml = uiGenCardHTML(DB_CARDS[id], 'deck_pool', false);
+                pHtml += `<div style="position:relative; display:inline-block; margin: 4px;">
+                            ${cardHtml}
+                            <div style="position:absolute; top:-8px; right:-8px; background:${ATTR_COLORS[col]}; color:${badgeCol}; border-radius:50%; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; font-size:0.9rem; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.5);">×${editPool[id]}</div>
+                          </div>`;
+            });
+            pHtml += `</div>`;
+        }
     });
     pEl.innerHTML = pHtml;
 }

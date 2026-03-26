@@ -27,20 +27,41 @@ const DB_PACKS = [
 
 // 【database.js 置き換え箇所：getStarterDeck からファイルの一番下まで】
 
-// 初期デッキ生成ロジック（40枚：土地16枚、呪文/生物24枚）
+// 初期デッキ生成ロジック（40枚固定の構築済みデッキ形式）
 function getStarterDeck(color) {
-    let deck = []; let land = color + '_land';
-    for(let i=0; i<16; i++) deck.push(land);
+    let deck = []; 
+    let land = color + '_land';
     
-    let nonLands = Object.keys(DB_CARDS).filter(id => DB_CARDS[id].color === color && DB_CARDS[id].type !== 'LAND');
-    // マナカーブ（低コスト10枚、中コスト10枚、高コスト4枚）
-    let curveTarget = [ {min: 0, max: 2, count: 10}, {min: 3, max: 4, count: 10}, {min: 5, max: 99, count: 4} ];
+    // 土地を16枚入れる
+    for(let i = 0; i < 16; i++) deck.push(land);
     
-    curveTarget.forEach(bracket => {
-        let cands = nonLands.filter(id => DB_CARDS[id].rarity === 'C' && DB_CARDS[id].cost >= bracket.min && DB_CARDS[id].cost <= bracket.max);
-        if(cands.length === 0) cands = nonLands.filter(id => DB_CARDS[id].cost >= bracket.min && DB_CARDS[id].cost <= bracket.max);
-        for(let i=0; i<bracket.count; i++) deck.push(cands[i % cands.length]);
-    });
+    // その属性のカードをレアリティと種類ごとに分類してリストアップ
+    let commonCr = Object.keys(DB_CARDS).filter(id => DB_CARDS[id].color === color && DB_CARDS[id].type === 'CREATURE' && DB_CARDS[id].rarity === 'C');
+    let commonSp = Object.keys(DB_CARDS).filter(id => DB_CARDS[id].color === color && DB_CARDS[id].type === 'SPELL' && DB_CARDS[id].rarity === 'C');
+    let uncomCr  = Object.keys(DB_CARDS).filter(id => DB_CARDS[id].color === color && DB_CARDS[id].type === 'CREATURE' && DB_CARDS[id].rarity === 'U');
+    let uncomSp  = Object.keys(DB_CARDS).filter(id => DB_CARDS[id].color === color && DB_CARDS[id].type === 'SPELL' && DB_CARDS[id].rarity === 'U');
+
+    // ▼ コモン：クリーチャー4種、呪文2種 を各3枚ずつ（計18枚）
+    for(let i = 0; i < 4; i++) { 
+        if(commonCr[i]) deck.push(commonCr[i], commonCr[i], commonCr[i]); 
+    }
+    for(let i = 0; i < 2; i++) { 
+        if(commonSp[i]) deck.push(commonSp[i], commonSp[i], commonSp[i]); 
+    }
+
+    // ▼ アンコモン：クリーチャー4種、呪文2種 を各1枚ずつ（計6枚）
+    for(let i = 0; i < 4; i++) { 
+        if(uncomCr[i]) deck.push(uncomCr[i]); 
+    }
+    for(let i = 0; i < 2; i++) { 
+        if(uncomSp[i]) deck.push(uncomSp[i]); 
+    }
+
+    // ※万が一カードが足りなくて40枚に満たない場合の安全装置（土地で埋める）
+    while(deck.length < 40) { 
+        deck.push(land); 
+    }
+
     return deck;
 }
 

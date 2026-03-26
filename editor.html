@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>カードデータエディター</title>
+    <script src="cards_set1.js"></script>
+    <style>
+        body { font-family: sans-serif; background: #222; color: #eee; margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        /* 左側のリスト */
+        #sidebar { width: 250px; background: #333; overflow-y: auto; padding: 10px; border-right: 2px solid #555; }
+        .card-item { padding: 5px; margin-bottom: 2px; background: #444; cursor: pointer; border-radius: 3px; font-size: 0.9em; }
+        .card-item:hover { background: #555; }
+        .card-item.selected { background: #1c7ed6; font-weight: bold; }
+        
+        /* 中央のエディター */
+        #editor { flex: 1; padding: 20px; overflow-y: auto; }
+        .form-group { margin-bottom: 10px; }
+        label { display: inline-block; width: 100px; font-weight: bold; }
+        input[type="text"], input[type="number"], select, textarea { width: 300px; padding: 5px; background: #111; color: #fff; border: 1px solid #555; border-radius: 3px; }
+        textarea { height: 60px; resize: vertical; }
+        
+        /* 右側の出力 */
+        #export-area { width: 350px; background: #333; padding: 10px; border-left: 2px solid #555; display: flex; flex-direction: column; }
+        #output-code { flex: 1; width: 100%; background: #111; color: #0f0; font-family: monospace; resize: none; margin-top: 10px; white-space: pre; overflow-x: auto; }
+        
+        .btn { padding: 8px 15px; background: #2b8a3e; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #3bc9db; }
+        .btn-red { background: #e03131; }
+        .flex-row { display: flex; gap: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <button class="btn" onclick="createNewCard()" style="width: 100%; margin-bottom: 10px;">＋ 新規カード作成</button>
+    <div id="card-list"></div>
+</div>
+
+<div id="editor">
+    <h2>カード編集</h2>
+    <div class="form-group"><label>カードID:</label> <input type="text" id="e_id" readonly style="background:#444;"></div>
+    <div class="form-group"><label>名前:</label> <input type="text" id="e_name" oninput="saveCurrent()"></div>
+    <div class="form-group"><label>種類:</label> 
+        <select id="e_type" onchange="toggleFields(); saveCurrent()">
+            <option value="CREATURE">CREATURE</option>
+            <option value="SPELL">SPELL</option>
+            <option value="LAND">LAND</option>
+        </select>
+    </div>
+    <div class="form-group"><label>属性(色):</label> 
+        <select id="e_color" onchange="saveCurrent()">
+            <option value="fire">fire (🔥)</option><option value="forest">forest (🌲)</option>
+            <option value="water">water (💧)</option><option value="light">light (✨)</option>
+            <option value="dark">dark (🌑)</option>
+        </select>
+    </div>
+    <div class="form-group"><label>コスト:</label> <input type="number" id="e_cost" min="0" oninput="saveCurrent()"></div>
+    <div class="form-group"><label>レアリティ:</label> 
+        <select id="e_rarity" onchange="saveCurrent()">
+            <option value="C">C (コモン)</option><option value="U">U (アンコモン)</option>
+            <option value="R">R (レア)</option><option value="M">M (神話レア)</option>
+        </select>
+    </div>
+    
+    <hr style="border-color: #555;">
+    
+    <div id="creature-fields" class="flex-row">
+        <div class="form-group"><label style="width:50px;">パワー:</label> <input type="number" id="e_power" style="width:80px;" oninput="saveCurrent()"></div>
+        <div class="form-group"><label style="width:70px;">タフネス:</label> <input type="number" id="e_toughness" style="width:80px;" oninput="saveCurrent()"></div>
+    </div>
+    <div class="form-group" id="haste-field"><label>速攻(haste):</label> <input type="checkbox" id="e_haste" onchange="saveCurrent()"></div>
+    
+    <div class="form-group" id="spell-fields"><label>呪文の効果:</label> <input type="text" id="e_effect" placeholder="例: dmg_cr_3" oninput="saveCurrent()"></div>
+    
+    <hr style="border-color: #555;">
+    
+    <div class="form-group"><label>テキスト:</label> <textarea id="e_text" oninput="saveCurrent()"></textarea></div>
+    <div class="form-group"><label>キーワード能力:</label> <input type="text" id="e_abilities" placeholder="flying, vigilance 等 (カンマ区切り)" oninput="saveCurrent()"></div>
+    
+    <div class="form-group"><label>起動型(JSON):</label> <input type="text" id="e_activated" placeholder='{"cost":1, "tap":true, "effect":"dmg_any_1"}' oninput="saveCurrent()"></div>
+    <div class="form-group"><label>誘発型(JSON):</label> <input type="text" id="e_triggered" placeholder='{"condition":"etb", "effect":"draw_self_1"}' oninput="saveCurrent()"></div>
+</div>
+
+<div id="export-area">
+    <h2>出力</h2>
+    <p style="font-size:0.85em; color:#aaa;">編集すると自動でコードが生成されます。すべてコピーして cards_set1.js に上書きしてください。</p>
+    <button class="btn btn-red" onclick="copyCode()">📋 コードをコピー</button>
+    <textarea id="output-code" readonly></textarea>
+</div>
+
+<script>
+    let cardsData = {};
+    let currentId = null;
+
+    // 起動時にデータを読み込む
+    window.onload = () => {
+        if(typeof SET1_CARDS === 'undefined') {
+            alert("cards_set1.js が見つかりません。同じフォルダに置いてください。"); return;
+        }
+        // ディープコピーして作業用データを作る
+        cardsData = JSON.parse(JSON.stringify(SET1_CARDS));
+        renderList();
+        generateCode();
+    };
+
+    function renderList() {
+        let listStr = "";
+        let sortedKeys = Object.keys(cardsData).sort((a,b) => {
+            let colOrder = {'fire':1, 'forest':2, 'water':3, 'light':4, 'dark':5};
+            let cA = cardsData[a]; let cB = cardsData[b];
+            if(colOrder[cA.color] !== colOrder[cB.color]) return colOrder[cA.color] - colOrder[cB.color];
+            if(cA.type !== cB.type) return cA.type.localeCompare(cB.type);
+            return (cA.cost||0) - (cB.cost||0);
+        });
+
+        sortedKeys.forEach(key => {
+            let c = cardsData[key];
+            let typeIcon = c.type === 'LAND' ? '🌍' : (c.type === 'CREATURE' ? '⚔️' : '🔥');
+            let colorIcon = {'fire':'🔴','forest':'🟢','water':'🔵','light':'🟡','dark':'🟣'}[c.color] || '⚪';
+            listStr += `<div class="card-item ${currentId === key ? 'selected' : ''}" onclick="selectCard('${key}')">
+                            ${colorIcon} [${c.cost||0}] ${c.name}
+                        </div>`;
+        });
+        document.getElementById('card-list').innerHTML = listStr;
+    }
+
+    function toggleFields() {
+        let type = document.getElementById('e_type').value;
+        document.getElementById('creature-fields').style.display = type === 'CREATURE' ? 'flex' : 'none';
+        document.getElementById('haste-field').style.display = type === 'CREATURE' ? 'block' : 'none';
+        document.getElementById('spell-fields').style.display = type === 'SPELL' ? 'block' : 'none';
+    }
+
+    function selectCard(idKey) {
+        currentId = idKey;
+        let c = cardsData[idKey];
+        document.getElementById('e_id').value = idKey;
+        document.getElementById('e_name').value = c.name || '';
+        document.getElementById('e_type').value = c.type || 'CREATURE';
+        document.getElementById('e_color').value = c.color || 'fire';
+        document.getElementById('e_cost').value = c.cost || 0;
+        document.getElementById('e_rarity').value = c.rarity || 'C';
+        document.getElementById('e_text').value = c.text || '';
+        
+        document.getElementById('e_power').value = c.power || 0;
+        document.getElementById('e_toughness').value = c.toughness || 0;
+        document.getElementById('e_haste').checked = !!c.haste;
+        document.getElementById('e_effect').value = c.effect || '';
+        
+        document.getElementById('e_abilities').value = (c.abilities || []).join(', ');
+        document.getElementById('e_activated').value = c.activated ? JSON.stringify(c.activated) : '';
+        document.getElementById('e_triggered').value = c.triggered ? JSON.stringify(c.triggered) : '';
+
+        toggleFields();
+        renderList(); // 選択状態を更新
+    }
+
+    function createNewCard() {
+        let id = prompt("新しいカードのIDを半角英数で入力してください (例: f_c99)");
+        if(!id || cardsData[id]) { alert("無効なIDか、すでに存在します。"); return; }
+        cardsData[id] = { name: "新規カード", type: "CREATURE", color: "fire", cost: 1, power: 1, toughness: 1, rarity: "C", text: "", abilities: [] };
+        selectCard(id);
+        generateCode();
+    }
+
+    function saveCurrent() {
+        if(!currentId) return;
+        let c = cardsData[currentId];
+        c.name = document.getElementById('e_name').value;
+        c.type = document.getElementById('e_type').value;
+        c.color = document.getElementById('e_color').value;
+        c.cost = parseInt(document.getElementById('e_cost').value) || 0;
+        c.rarity = document.getElementById('e_rarity').value;
+        c.text = document.getElementById('e_text').value;
+
+        if(c.type === 'CREATURE') {
+            c.power = parseInt(document.getElementById('e_power').value) || 0;
+            c.toughness = parseInt(document.getElementById('e_toughness').value) || 0;
+            c.haste = document.getElementById('e_haste').checked;
+            delete c.effect;
+        } else if(c.type === 'SPELL') {
+            c.effect = document.getElementById('e_effect').value;
+            delete c.power; delete c.toughness; delete c.haste;
+        } else {
+            delete c.power; delete c.toughness; delete c.haste; delete c.effect;
+        }
+
+        let absStr = document.getElementById('e_abilities').value;
+        c.abilities = absStr ? absStr.split(',').map(s => s.trim()).filter(s => s) : [];
+
+        try { 
+            let act = document.getElementById('e_activated').value;
+            if(act) c.activated = JSON.parse(act); else delete c.activated;
+        } catch(e){}
+        
+        try { 
+            let tri = document.getElementById('e_triggered').value;
+            if(tri) c.triggered = JSON.parse(tri); else delete c.triggered;
+        } catch(e){}
+
+        renderList();
+        generateCode();
+    }
+
+    function formatValue(val) {
+        if(typeof val === 'string') return `'${val.replace(/\n/g, '\\n')}'`;
+        if(Array.isArray(val)) return `[${val.map(v => `'${v}'`).join(', ')}]`;
+        if(typeof val === 'object' && val !== null) return JSON.stringify(val);
+        return val;
+    }
+
+    function generateCode() {
+        let out = "// 第1弾カードパックのリスト\nconst SET1_CARDS = {\n";
+        let keys = Object.keys(cardsData);
+        keys.forEach((key, index) => {
+            let c = cardsData[key];
+            let props = [];
+            for(let p in c) { props.push(`${p}: ${formatValue(c[p])}`); }
+            out += `    ${key}: { ${props.join(', ')} }${index < keys.length - 1 ? ',' : ''}\n`;
+        });
+        out += "};\n";
+        document.getElementById('output-code').value = out;
+    }
+
+    function copyCode() {
+        let codeArea = document.getElementById('output-code');
+        codeArea.select();
+        document.execCommand('copy');
+        alert("コードをコピーしました！ cards_set1.js に貼り付けて上書きしてください。");
+    }
+</script>
+
+</body>
+</html>

@@ -94,7 +94,7 @@ const SET1_CARDS = {
     w_c14:{ name: '深海のヤリイカ', type: 'CREATURE', color: 'water', cost: 5, power: 4, toughness: 5, haste: false, rarity: 'U', text: '【警戒】', abilities: ['vigilance'] },
     w_c15:{ name: '海竜', type: 'CREATURE', color: 'water', cost: 6, power: 6, toughness: 6, haste: false, rarity: 'R', text: '【トランプル】', abilities: ['trample'] },
     w_c16:{ name: '氷の巨人', type: 'CREATURE', color: 'water', cost: 6, power: 6, toughness: 7, haste: false, rarity: 'R', text: '凍てつく拳。', abilities: [] },
-    w_c17:{ name: '大ダコ', type: 'CREATURE', color: 'water', cost: 7, power: 7, toughness: 7, haste: false, rarity: 'R', text: '足を絡めとる。', abilities: [] },
+    w_c17:{ name: '大ダコ', type: 'CREATURE', color: 'water', cost: 2, power: 2, toughness: 3, haste: false, rarity: 'R', text: '【出たとき】: 対象を手札に戻す。', abilities: [], triggered: { condition: 'etb', effect: 'bounce_cr_1' } },
     w_c18:{ name: '霧の天使', type: 'CREATURE', color: 'water', cost: 4, power: 3, toughness: 4, haste: false, rarity: 'R', text: '【飛行】【警戒】', abilities: ['flying', 'vigilance'] },
     w_c19:{ name: 'クラーケン', type: 'CREATURE', color: 'water', cost: 8, power: 8, toughness: 8, haste: false, rarity: 'M', text: '【トランプル】', abilities: ['trample'] },
     w_c20:{ name: 'リバイアサン', type: 'CREATURE', color: 'water', cost: 9, power: 10, toughness: 10, haste: false, rarity: 'M', text: '【トランプル】', abilities: ['trample'] },

@@ -5,7 +5,7 @@ const SET1_CARDS = {
     water_land: { name: '島', type: 'LAND', color: 'water', cost: 0, rarity: 'C', text: '💧を生む', abilities: [] },
     light_land: { name: '平原', type: 'LAND', color: 'light', cost: 0, rarity: 'C', text: '✨を生む', abilities: [] },
     dark_land: { name: '沼', type: 'LAND', color: 'dark', cost: 0, rarity: 'C', text: '🌑を生む', abilities: [] },
-    f_c1: { name: 'ゴブリン', type: 'CREATURE', color: 'fire', cost: 1, power: 1, toughness: 1, haste: true, rarity: 'C', text: '【速攻】', abilities: [] },
+    f_c1: { name: 'ゴブリン', type: 'CREATURE', color: 'fire', cost: 1, power: 1, toughness: 1, haste: true, rarity: 'C', text: '[速攻]', abilities: [] },
     f_c2: { name: '火炎トカゲ', type: 'CREATURE', color: 'fire', cost: 2, power: 2, toughness: 2, haste: false, rarity: 'C', text: '標準的な戦力。', abilities: [] },
     f_c3: { name: '炎の祈祷師', type: 'CREATURE', color: 'fire', cost: 3, power: 3, toughness: 2, haste: false, rarity: 'C', text: '【起動】(タップ): 対象に1ダメージ', abilities: [], activated: {"cost":0,"tap":true,"effect":"dmg_any_1"} },
     f_c4: { name: '熱狂する戦士', type: 'CREATURE', color: 'fire', cost: 1, power: 2, toughness: 1, haste: false, rarity: 'C', text: '血の気が多い。', abilities: [] },

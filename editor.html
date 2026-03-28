@@ -249,9 +249,10 @@
 
     function autoGenerateText() {
         let lines = []; let kw = [];
-        if(document.getElementById('e_haste').checked) kw.push("【速攻】");
-        document.querySelectorAll('.kw-cb:checked').forEach(cb => kw.push(`【${ABILITY_NAME[cb.value]}】`));
-        if(kw.length > 0) lines.push(kw.join(''));
+        if(document.getElementById('e_haste').checked) kw.push("速攻");
+        document.querySelectorAll('.kw-cb:checked').forEach(cb => kw.push(`${ABILITY_NAME[cb.value]}`));
+        // ▼ 修正：【 】ではなく [ ] を使うように変更 ▼
+        if(kw.length > 0) lines.push(`[${kw.join(', ')}]`); 
 
         let getEffText = (e) => {
             let t = {"any":"対象", "cr":"対象クリーチャー", "p":"対象プレイヤー", "opp":"相手", "self":"自身", "allcr":"全クリーチャー"}[e.rule] || "対象";
@@ -281,11 +282,13 @@
             if(document.getElementById('e_act_en').checked) {
                 let cost = parseInt(document.getElementById('e_act_cost').value)||0; let tap = document.getElementById('e_act_tap').checked;
                 let costStr = ""; if(cost > 0) costStr += "①".repeat(cost); if(tap) costStr += (costStr ? ", " : "") + "タップ";
-                lines.push(`【起動】(${costStr||'0'}): ` + combineTexts(editEffects.act));
+                // ▼ 修正：【 】を避けて、MTG風の表記に変更 ▼
+                lines.push(`${costStr||'0'}: ` + combineTexts(editEffects.act));
             }
             if(document.getElementById('e_tri_en').checked) {
-                let condStr = {"etb":"【出たとき】:", "death":"【死亡時】:", "upkeep":"【誘発】開始時、"}[document.getElementById('e_tri_cond').value];
-                lines.push(`${condStr} ` + combineTexts(editEffects.tri));
+                // ▼ 修正：【 】を避けて、MTG風の表記に変更 ▼
+                let condStr = {"etb":"場に出たとき、", "death":"死亡したとき、", "upkeep":"あなたのターン開始時、"}[document.getElementById('e_tri_cond').value];
+                lines.push(`${condStr}` + combineTexts(editEffects.tri));
             }
         } else if(document.getElementById('e_type').value === 'SPELL') lines.push(combineTexts(editEffects.spell));
 

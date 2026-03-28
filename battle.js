@@ -377,20 +377,21 @@ async function batStartCpuTurn() {
 }
 
 // 【battle.js 置き換え箇所：batEndTurn 関数】
-
 async function batEndTurn() { 
-    // ▼ 追加：ターン終了時にステータスを初期値（DB_CARDS）に戻す補助関数 ▼
     let resetStats = (c) => {
         let base = DB_CARDS[c.idKey];
-        // パワーとタフネスを元の数値に戻す
-        c.power = base.power;
-        c.toughness = base.toughness;
-        // 蓄積ダメージや接死判定もリセット
+        if (base) {
+            c.power = base.power;
+            c.toughness = base.toughness;
+        } else if (c.basePower !== undefined) {
+            // ▼ 修正：トークンなどのDBにないカードは、生成時の基本値に戻す ▼
+            c.power = c.basePower;
+            c.toughness = c.baseToughness;
+        }
         c.damage = 0;
         c.deathtouchKilled = false;
     };
 
-    // プレイヤーとCPUの場の全クリーチャーにリセットを適用
     BAT.player.creatures.forEach(resetStats); 
     BAT.cpu.creatures.forEach(resetStats); 
 

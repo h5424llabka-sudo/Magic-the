@@ -78,7 +78,13 @@ const MagicEngine = {
     // ▼ トークン生成 ▼
     token: (rule, v1, v2, p) => {
         uiShowMsg(`🐣 トークン生成！`);
-        let token = { uid: ++uidCounter, idKey: 'token', name: 'トークン', type: 'CREATURE', color: 'light', cost: 0, power: v1, toughness: v2, haste: false, rarity: 'C', text: '生成されたトークン', abilities: [], tapped: false, sickness: true, damage: 0, state: 'normal', deathtouchKilled: false };
+        let token = { 
+            uid: ++uidCounter, idKey: 'token', name: 'トークン', type: 'CREATURE', color: 'light', cost: 0, 
+            power: v1, toughness: v2, 
+            // ▼ 追加：ターン終了時のリセット用に基本値を記憶させておく ▼
+            basePower: v1, baseToughness: v2, 
+            haste: false, rarity: 'C', text: '生成されたトークン', abilities: [], tapped: false, sickness: true, damage: 0, state: 'normal', deathtouchKilled: false 
+        };
         p.creatures.push(token);
     }
 };

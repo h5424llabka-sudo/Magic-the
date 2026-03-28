@@ -247,11 +247,12 @@
         toggleFields(); renderList(); generateCode();
     }
 
+// 【editor.html 置き換え箇所：autoGenerateText 関数をまるごと】
+
     function autoGenerateText() {
         let lines = []; let kw = [];
         if(document.getElementById('e_haste').checked) kw.push("速攻");
         document.querySelectorAll('.kw-cb:checked').forEach(cb => kw.push(`${ABILITY_NAME[cb.value]}`));
-        // ▼ 修正：【 】ではなく [ ] を使うように変更 ▼
         if(kw.length > 0) lines.push(`[${kw.join(', ')}]`); 
 
         let getEffText = (e) => {
@@ -274,19 +275,23 @@
 
         let combineTexts = (effArray) => {
             if(effArray.length === 0) return "";
+            // 複数の効果を「、」でつなぐ
             let text = effArray.map(e => getEffText(e)).join('、');
-            return text.replace(/し、$/, 'する。').replace(/え、$/, 'える。').replace(/させ、$/, 'させる。');
+            
+            // ▼ 修正：文章の最後（$）の言葉を、言い切りの形（終止形）に正しく変換する ▼
+            return text.replace(/戻し$/, '戻す。')
+                       .replace(/し$/, 'する。')
+                       .replace(/与え$/, '与える。')
+                       .replace(/させ$/, 'させる。');
         };
 
         if(document.getElementById('e_type').value === 'CREATURE') {
             if(document.getElementById('e_act_en').checked) {
                 let cost = parseInt(document.getElementById('e_act_cost').value)||0; let tap = document.getElementById('e_act_tap').checked;
                 let costStr = ""; if(cost > 0) costStr += "①".repeat(cost); if(tap) costStr += (costStr ? ", " : "") + "タップ";
-                // ▼ 修正：【 】を避けて、MTG風の表記に変更 ▼
                 lines.push(`${costStr||'0'}: ` + combineTexts(editEffects.act));
             }
             if(document.getElementById('e_tri_en').checked) {
-                // ▼ 修正：【 】を避けて、MTG風の表記に変更 ▼
                 let condStr = {"etb":"場に出たとき、", "death":"死亡したとき、", "upkeep":"あなたのターン開始時、"}[document.getElementById('e_tri_cond').value];
                 lines.push(`${condStr}` + combineTexts(editEffects.tri));
             }

@@ -2,34 +2,27 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>カードデータエディター (v2.0)</title>
+    <title>カードデータエディター (v3.0 複数効果対応)</title>
     <script src="cards_set1.js"></script>
     <style>
         body { font-family: sans-serif; background: #222; color: #eee; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        /* 左側のリスト */
         #sidebar { width: 280px; background: #333; overflow-y: auto; padding: 10px; border-right: 2px solid #555; }
         .card-item { padding: 5px; margin-bottom: 2px; background: #444; cursor: pointer; border-radius: 3px; font-size: 0.9em; display: flex; justify-content: space-between; }
         .card-item:hover { background: #555; }
         .card-item.selected { background: #1c7ed6; font-weight: bold; }
-        
-        /* 中央のエディター */
         #editor { flex: 1; padding: 20px; overflow-y: auto; }
         .form-group { margin-bottom: 15px; }
         label { font-weight: bold; margin-right: 10px; }
         input[type="text"], input[type="number"], select, textarea { padding: 5px; background: #111; color: #fff; border: 1px solid #555; border-radius: 3px; }
-        input[type="text"] { width: 300px; }
         textarea { width: 100%; height: 80px; resize: vertical; }
-        
         .box { background: #2b2b2b; padding: 10px; border: 1px solid #444; border-radius: 5px; margin-top: 5px; }
-        
-        /* 右側の出力 */
+        .effect-row { display: flex; gap: 8px; align-items: center; background: #333; padding: 8px; border-radius: 4px; margin-bottom: 5px; }
         #export-area { width: 350px; background: #333; padding: 10px; border-left: 2px solid #555; display: flex; flex-direction: column; }
         #output-code { flex: 1; width: 100%; background: #111; color: #0f0; font-family: monospace; resize: none; margin-top: 10px; white-space: pre; overflow-x: auto; }
-        
         .btn { padding: 8px 15px; background: #2b8a3e; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .btn:hover { background: #3bc9db; }
         .btn-red { background: #e03131; }
-        .btn-blue { background: #1c7ed6; padding: 4px 10px; font-size: 0.85em; margin-bottom: 5px; }
+        .btn-small { padding: 4px 8px; font-size: 0.8em; }
         .flex-row { display: flex; gap: 10px; align-items: center; }
     </style>
 </head>
@@ -47,9 +40,7 @@
         <div><label>名前:</label> <input type="text" id="e_name" style="width:200px;" oninput="saveCurrent()"></div>
         <div><label>種類:</label> 
             <select id="e_type" onchange="toggleFields(); saveCurrent()">
-                <option value="CREATURE">CREATURE</option>
-                <option value="SPELL">SPELL</option>
-                <option value="LAND">LAND</option>
+                <option value="CREATURE">CREATURE</option><option value="SPELL">SPELL</option><option value="LAND">LAND</option>
             </select>
         </div>
     </div>
@@ -58,8 +49,7 @@
         <div><label>属性:</label> 
             <select id="e_color" onchange="saveCurrent()">
                 <option value="fire">fire (🔥)</option><option value="forest">forest (🌲)</option>
-                <option value="water">water (💧)</option><option value="light">light (✨)</option>
-                <option value="dark">dark (🌑)</option>
+                <option value="water">water (💧)</option><option value="light">light (✨)</option><option value="dark">dark (🌑)</option>
             </select>
         </div>
         <div><label>コスト:</label> <input type="number" id="e_cost" min="0" style="width:60px;" oninput="saveCurrent()"></div>
@@ -80,8 +70,11 @@
     </div>
 
     <div id="spell-fields" class="form-group">
-        <label>呪文の効果:</label>
-        <div class="box" id="spell-gui"></div>
+        <label>呪文の効果 (複数可):</label>
+        <div class="box">
+            <div id="spell-eff-list"></div>
+            <button class="btn btn-small" onclick="addEffectRow('spell')">＋ 効果を追加</button>
+        </div>
     </div>
     
     <div id="creature-fields">
@@ -93,25 +86,22 @@
         <div class="form-group">
             <label><input type="checkbox" id="e_act_en" onchange="toggleFields(); saveCurrent()"> 起動型能力を設定する</label>
             <div id="act-gui" class="box">
-                <div style="margin-bottom:8px;">
-                    コスト: <input type="number" id="e_act_cost" style="width:50px" value="1" oninput="saveCurrent()">
-                    <label style="margin-left:10px;"><input type="checkbox" id="e_act_tap" onchange="saveCurrent()"> タップが必要</label>
-                </div>
-                <div id="act-eff-gui"></div>
+                <div style="margin-bottom:8px;">コスト: <input type="number" id="e_act_cost" style="width:50px" value="1" oninput="saveCurrent()"> <label style="margin-left:10px;"><input type="checkbox" id="e_act_tap" onchange="saveCurrent()"> タップが必要</label></div>
+                <div id="act-eff-list"></div>
+                <button class="btn btn-small" onclick="addEffectRow('act')">＋ 効果を追加</button>
             </div>
         </div>
 
         <div class="form-group">
             <label><input type="checkbox" id="e_tri_en" onchange="toggleFields(); saveCurrent()"> 誘発型能力を設定する</label>
             <div id="tri-gui" class="box">
-                <div style="margin-bottom:8px;">
-                    発動条件: <select id="e_tri_cond" onchange="saveCurrent()">
-                        <option value="etb">場に出たとき (ETB)</option>
-                        <option value="death">死亡時 (Death)</option>
-                        <option value="upkeep">ターン開始時 (Upkeep)</option>
+                <div style="margin-bottom:8px;">発動条件: 
+                    <select id="e_tri_cond" onchange="saveCurrent()">
+                        <option value="etb">場に出たとき (ETB)</option><option value="death">死亡時 (Death)</option><option value="upkeep">ターン開始時 (Upkeep)</option>
                     </select>
                 </div>
-                <div id="tri-eff-gui"></div>
+                <div id="tri-eff-list"></div>
+                <button class="btn btn-small" onclick="addEffectRow('tri')">＋ 効果を追加</button>
             </div>
         </div>
     </div>
@@ -120,8 +110,8 @@
     
     <div class="form-group">
         <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-            <label>カードテキスト (フレーバーテキスト含む):</label>
-            <button class="btn btn-blue" onclick="autoGenerateText()">🔄 能力からテキストを自動入力</button>
+            <label>カードテキスト:</label>
+            <button class="btn btn-small" style="background:#1c7ed6;" onclick="autoGenerateText()">🔄 能力からテキストを自動入力</button>
         </div>
         <textarea id="e_text" oninput="saveCurrent()"></textarea>
     </div>
@@ -129,82 +119,84 @@
 
 <div id="export-area">
     <h2>出力</h2>
-    <p style="font-size:0.85em; color:#aaa;">編集すると自動でコードが生成されます。すべてコピーして cards_set1.js に上書きしてください。</p>
     <button class="btn btn-red" onclick="copyCode()">📋 コードをコピー</button>
     <textarea id="output-code" readonly></textarea>
 </div>
 
 <script>
-    let cardsData = {};
-    let currentId = null;
-    let isLoading = false; // 無限ループ防止用
+    let cardsData = {}; let currentId = null; let isLoading = false;
+    let editEffects = { spell: [], act: [], tri: [] }; // 複数効果を管理
 
-    const ABILITY_NAME = {
-        'flying': '飛行', 'first_strike': '先制攻撃', 'deathtouch': '接死',
-        'trample': 'トランプル', 'vigilance': '警戒', 'lifelink': '絆魂',
-        'defender': '防衛', 'reach': '到達', 'hexproof': '呪禁'
-    };
-
-    // ドロップダウン生成ジェネレーター
-    function buildEffectDropdowns(prefix) {
-        return `
-        効果:
-        <select id="${prefix}_eff" onchange="saveCurrent()">
-            <option value="dmg">ダメージ</option><option value="heal">回復</option>
-            <option value="buff">強化(単体)</option><option value="buffall">強化(全体)</option>
-            <option value="destroy">破壊</option><option value="drain">吸収</option>
-            <option value="draw">ドロー</option><option value="discard">ハンデス</option>
-            <option value="bounce">手札戻し</option><option value="tap">タップ</option>
-            <option value="ramp">マナ加速</option><option value="token">トークン生成</option>
-            <option value="buffself">自己強化(1T)</option>
-        </select>
-        対象:
-        <select id="${prefix}_rule" onchange="saveCurrent()">
-            <option value="any">対象(任意)</option><option value="cr">対象クリーチャー</option>
-            <option value="p">対象プレイヤー</option><option value="opp">相手</option>
-            <option value="self">自分自身</option><option value="allcr">全クリーチャー</option>
-        </select>
-        値1: <input type="number" id="${prefix}_v1" style="width:50px" value="1" oninput="saveCurrent()">
-        値2: <input type="number" id="${prefix}_v2" style="width:50px" value="0" oninput="saveCurrent()">
-        `;
-    }
+    const ABILITY_NAME = { 'flying': '飛行', 'first_strike': '先制攻撃', 'deathtouch': '接死', 'trample': 'トランプル', 'vigilance': '警戒', 'lifelink': '絆魂', 'defender': '防衛', 'reach': '到達', 'hexproof': '呪禁' };
 
     window.onload = () => {
         if(typeof SET1_CARDS === 'undefined') { alert("cards_set1.js が見つかりません。"); return; }
         cardsData = JSON.parse(JSON.stringify(SET1_CARDS));
-        
-        // GUIの初期化
-        let kwHtml = "";
-        for(let key in ABILITY_NAME) {
-            kwHtml += `<label style="width:100px; font-weight:normal;"><input type="checkbox" class="kw-cb" value="${key}" onchange="saveCurrent()"> ${ABILITY_NAME[key]}</label>`;
-        }
+        let kwHtml = ""; for(let key in ABILITY_NAME) kwHtml += `<label style="width:100px; font-weight:normal;"><input type="checkbox" class="kw-cb" value="${key}" onchange="saveCurrent()"> ${ABILITY_NAME[key]}</label>`;
         document.getElementById('kw-container').innerHTML = kwHtml;
-        document.getElementById('spell-gui').innerHTML = buildEffectDropdowns('e_spell');
-        document.getElementById('act-eff-gui').innerHTML = buildEffectDropdowns('e_act');
-        document.getElementById('tri-eff-gui').innerHTML = buildEffectDropdowns('e_tri');
-
         renderList(); generateCode();
     };
 
     function renderList() {
         let listStr = "";
-        let sortedKeys = Object.keys(cardsData).sort((a,b) => {
+        Object.keys(cardsData).sort((a,b) => {
             let colOrder = {'fire':1, 'forest':2, 'water':3, 'light':4, 'dark':5};
-            let cA = cardsData[a]; let cB = cardsData[b];
+            let cA = cardsData[a], cB = cardsData[b];
             if(colOrder[cA.color] !== colOrder[cB.color]) return colOrder[cA.color] - colOrder[cB.color];
             if(cA.type !== cB.type) return cA.type.localeCompare(cB.type);
             return (cA.cost||0) - (cB.cost||0);
-        });
-
-        sortedKeys.forEach(key => {
+        }).forEach(key => {
             let c = cardsData[key];
-            let typeIcon = c.type === 'LAND' ? '🌍' : (c.type === 'CREATURE' ? '⚔️' : '🔥');
             let colorIcon = {'fire':'🔴','forest':'🟢','water':'🔵','light':'🟡','dark':'🟣'}[c.color] || '⚪';
-            listStr += `<div class="card-item ${currentId === key ? 'selected' : ''}" onclick="selectCard('${key}')">
-                            <span>${colorIcon} [${c.cost||0}] ${c.name}</span> <span style="color:#aaa;">${typeIcon}</span>
-                        </div>`;
+            listStr += `<div class="card-item ${currentId === key ? 'selected' : ''}" onclick="selectCard('${key}')"><span>${colorIcon} [${c.cost||0}] ${c.name}</span> <span style="color:#aaa;">${c.type==='LAND'?'🌍':(c.type==='CREATURE'?'⚔️':'🔥')}</span></div>`;
         });
         document.getElementById('card-list').innerHTML = listStr;
+    }
+
+    function renderEffectsList(type) {
+        let html = '';
+        editEffects[type].forEach((eff, idx) => {
+            html += `<div class="effect-row">
+                <select onchange="updateEffect('${type}', ${idx}, 'eff', this.value)">
+                    <option value="dmg" ${eff.eff==='dmg'?'selected':''}>ダメージ</option><option value="heal" ${eff.eff==='heal'?'selected':''}>回復</option>
+                    <option value="buff" ${eff.eff==='buff'?'selected':''}>強化(単体)</option><option value="buffall" ${eff.eff==='buffall'?'selected':''}>強化(全体)</option>
+                    <option value="destroy" ${eff.eff==='destroy'?'selected':''}>破壊</option><option value="drain" ${eff.eff==='drain'?'selected':''}>吸収</option>
+                    <option value="draw" ${eff.eff==='draw'?'selected':''}>ドロー</option><option value="discard" ${eff.eff==='discard'?'selected':''}>ハンデス</option>
+                    <option value="bounce" ${eff.eff==='bounce'?'selected':''}>手札戻し</option><option value="tap" ${eff.eff==='tap'?'selected':''}>タップ</option>
+                    <option value="ramp" ${eff.eff==='ramp'?'selected':''}>マナ加速</option><option value="token" ${eff.eff==='token'?'selected':''}>トークン</option>
+                    <option value="buffself" ${eff.eff==='buffself'?'selected':''}>自己強化(1T)</option>
+                </select>
+                対象: <select onchange="updateEffect('${type}', ${idx}, 'rule', this.value)">
+                    <option value="any" ${eff.rule==='any'?'selected':''}>対象(任意)</option><option value="cr" ${eff.rule==='cr'?'selected':''}>対象クリーチャー</option>
+                    <option value="p" ${eff.rule==='p'?'selected':''}>対象プレイヤー</option><option value="opp" ${eff.rule==='opp'?'selected':''}>相手</option>
+                    <option value="self" ${eff.rule==='self'?'selected':''}>自分/味方</option><option value="allcr" ${eff.rule==='allcr'?'selected':''}>全クリーチャー</option>
+                </select>
+                値1: <input type="number" style="width:40px" value="${eff.v1}" oninput="updateEffect('${type}', ${idx}, 'v1', this.value)">
+                値2: <input type="number" style="width:40px" value="${eff.v2}" oninput="updateEffect('${type}', ${idx}, 'v2', this.value)">
+                <button class="btn btn-red btn-small" onclick="removeEffectRow('${type}', ${idx})">✕</button>
+            </div>`;
+        });
+        document.getElementById(`${type}-eff-list`).innerHTML = html;
+    }
+
+    function addEffectRow(type) { editEffects[type].push({eff: 'dmg', rule: 'any', v1: 1, v2: 0}); renderEffectsList(type); saveCurrent(); }
+    function removeEffectRow(type, idx) { editEffects[type].splice(idx, 1); renderEffectsList(type); saveCurrent(); }
+    function updateEffect(type, idx, key, val) { editEffects[type][idx][key] = val; saveCurrent(); }
+
+    function parseEffectStrMulti(str) {
+        if(!str) return [];
+        return str.split(',').map(s => {
+            let p = s.trim().split('_');
+            return { eff: p[0]||'dmg', rule: p[1]||'any', v1: parseInt(p[2])||0, v2: parseInt(p[3]||p[2])||0 };
+        });
+    }
+
+    function buildEffectStrMulti(effArray) {
+        return effArray.map(e => {
+            let s = `${e.eff}_${e.rule}`;
+            if(e.v1) s += `_${e.v1}`; if(e.v2 && e.v2 !== "0" && e.v2 !== 0) s += `_${e.v2}`;
+            return s;
+        }).join(',');
     }
 
     function toggleFields() {
@@ -212,178 +204,102 @@
         document.getElementById('creature-fields').style.display = type === 'CREATURE' ? 'block' : 'none';
         document.getElementById('e_haste').parentElement.style.display = type === 'CREATURE' ? 'inline-block' : 'none';
         document.getElementById('spell-fields').style.display = type === 'SPELL' ? 'block' : 'none';
-
         document.getElementById('act-gui').style.display = document.getElementById('e_act_en').checked ? 'block' : 'none';
         document.getElementById('tri-gui').style.display = document.getElementById('e_tri_en').checked ? 'block' : 'none';
     }
 
-    function parseEffectStr(str, prefix) {
-        if(!str) return;
-        let p = str.split('_');
-        document.getElementById(prefix+'_eff').value = p[0] || 'dmg';
-        document.getElementById(prefix+'_rule').value = p[1] || 'any';
-        document.getElementById(prefix+'_v1').value = p[2] || 0;
-        document.getElementById(prefix+'_v2').value = p[3] || p[2] || 0;
-    }
-
     function selectCard(idKey) {
-        isLoading = true;
-        currentId = idKey; let c = cardsData[idKey];
-        document.getElementById('e_id').value = idKey;
-        document.getElementById('e_name').value = c.name || '';
-        document.getElementById('e_type').value = c.type || 'CREATURE';
-        document.getElementById('e_color').value = c.color || 'fire';
-        document.getElementById('e_cost').value = c.cost || 0;
-        document.getElementById('e_rarity').value = c.rarity || 'C';
-        document.getElementById('e_text').value = c.text || '';
-        document.getElementById('e_power').value = c.power || 0;
-        document.getElementById('e_toughness').value = c.toughness || 0;
-        document.getElementById('e_haste').checked = !!c.haste;
-        
+        isLoading = true; currentId = idKey; let c = cardsData[idKey];
+        document.getElementById('e_id').value = idKey; document.getElementById('e_name').value = c.name || '';
+        document.getElementById('e_type').value = c.type || 'CREATURE'; document.getElementById('e_color').value = c.color || 'fire';
+        document.getElementById('e_cost').value = c.cost || 0; document.getElementById('e_rarity').value = c.rarity || 'C';
+        document.getElementById('e_text').value = c.text || ''; document.getElementById('e_power').value = c.power || 0;
+        document.getElementById('e_toughness').value = c.toughness || 0; document.getElementById('e_haste').checked = !!c.haste;
         document.querySelectorAll('.kw-cb').forEach(cb => cb.checked = (c.abilities || []).includes(cb.value));
 
-        if(c.type === 'SPELL' && c.effect) parseEffectStr(c.effect, 'e_spell');
+        editEffects = { spell: [], act: [], tri: [] };
+        if(c.type === 'SPELL' && c.effect) editEffects.spell = parseEffectStrMulti(c.effect);
         
-        if(c.activated) {
-            document.getElementById('e_act_en').checked = true;
-            document.getElementById('e_act_cost').value = c.activated.cost || 0;
-            document.getElementById('e_act_tap').checked = !!c.activated.tap;
-            parseEffectStr(c.activated.effect, 'e_act');
-        } else { document.getElementById('e_act_en').checked = false; }
+        if(c.activated) { document.getElementById('e_act_en').checked = true; document.getElementById('e_act_cost').value = c.activated.cost || 0; document.getElementById('e_act_tap').checked = !!c.activated.tap; editEffects.act = parseEffectStrMulti(c.activated.effect); } else document.getElementById('e_act_en').checked = false;
+        if(c.triggered) { document.getElementById('e_tri_en').checked = true; document.getElementById('e_tri_cond').value = c.triggered.condition || 'etb'; editEffects.tri = parseEffectStrMulti(c.triggered.effect); } else document.getElementById('e_tri_en').checked = false;
 
-        if(c.triggered) {
-            document.getElementById('e_tri_en').checked = true;
-            document.getElementById('e_tri_cond').value = c.triggered.condition || 'etb';
-            parseEffectStr(c.triggered.effect, 'e_tri');
-        } else { document.getElementById('e_tri_en').checked = false; }
-
+        renderEffectsList('spell'); renderEffectsList('act'); renderEffectsList('tri');
         toggleFields(); renderList(); isLoading = false;
     }
 
-    function createNewCard() {
-        let id = prompt("新しいカードのIDを半角英数で入力 (例: f_c99)");
-        if(!id || cardsData[id]) { alert("無効か既に存在します。"); return; }
-        cardsData[id] = { name: "新規カード", type: "CREATURE", color: "fire", cost: 1, power: 1, toughness: 1, rarity: "C", text: "", abilities: [] };
-        selectCard(id); generateCode();
-    }
-
-    function getEffectStrFromGUI(prefix) {
-        let eff = document.getElementById(prefix+'_eff').value;
-        let rule = document.getElementById(prefix+'_rule').value;
-        let v1 = document.getElementById(prefix+'_v1').value;
-        let v2 = document.getElementById(prefix+'_v2').value;
-        let out = `${eff}_${rule}`;
-        if(v1 !== "") out += `_${v1}`;
-        if(v2 !== "" && v2 !== "0") out += `_${v2}`;
-        return out;
-    }
+    function createNewCard() { let id = prompt("ID (例: f_c99)"); if(!id || cardsData[id]) return; cardsData[id] = { name: "新規カード", type: "CREATURE", color: "fire", cost: 1, power: 1, toughness: 1, rarity: "C", text: "", abilities: [] }; selectCard(id); generateCode(); }
 
     function saveCurrent() {
-        if(!currentId || isLoading) return;
-        let c = cardsData[currentId];
-        c.name = document.getElementById('e_name').value;
-        c.type = document.getElementById('e_type').value;
-        c.color = document.getElementById('e_color').value;
-        c.cost = parseInt(document.getElementById('e_cost').value) || 0;
-        c.rarity = document.getElementById('e_rarity').value;
-        c.text = document.getElementById('e_text').value;
+        if(!currentId || isLoading) return; let c = cardsData[currentId];
+        c.name = document.getElementById('e_name').value; c.type = document.getElementById('e_type').value;
+        c.color = document.getElementById('e_color').value; c.cost = parseInt(document.getElementById('e_cost').value) || 0;
+        c.rarity = document.getElementById('e_rarity').value; c.text = document.getElementById('e_text').value;
 
-        let abs = Array.from(document.querySelectorAll('.kw-cb:checked')).map(cb => cb.value);
-        c.abilities = abs.length > 0 ? abs : [];
+        let abs = Array.from(document.querySelectorAll('.kw-cb:checked')).map(cb => cb.value); c.abilities = abs.length > 0 ? abs : [];
 
         if(c.type === 'CREATURE') {
-            c.power = parseInt(document.getElementById('e_power').value) || 0;
-            c.toughness = parseInt(document.getElementById('e_toughness').value) || 0;
-            c.haste = document.getElementById('e_haste').checked;
-            delete c.effect;
-
-            if(document.getElementById('e_act_en').checked) {
-                c.activated = { cost: parseInt(document.getElementById('e_act_cost').value)||0, tap: document.getElementById('e_act_tap').checked, effect: getEffectStrFromGUI('e_act') };
-            } else delete c.activated;
-
-            if(document.getElementById('e_tri_en').checked) {
-                c.triggered = { condition: document.getElementById('e_tri_cond').value, effect: getEffectStrFromGUI('e_tri') };
-            } else delete c.triggered;
-
+            c.power = parseInt(document.getElementById('e_power').value) || 0; c.toughness = parseInt(document.getElementById('e_toughness').value) || 0; c.haste = document.getElementById('e_haste').checked; delete c.effect;
+            if(document.getElementById('e_act_en').checked) c.activated = { cost: parseInt(document.getElementById('e_act_cost').value)||0, tap: document.getElementById('e_act_tap').checked, effect: buildEffectStrMulti(editEffects.act) }; else delete c.activated;
+            if(document.getElementById('e_tri_en').checked) c.triggered = { condition: document.getElementById('e_tri_cond').value, effect: buildEffectStrMulti(editEffects.tri) }; else delete c.triggered;
         } else if(c.type === 'SPELL') {
-            c.effect = getEffectStrFromGUI('e_spell');
-            delete c.power; delete c.toughness; delete c.haste; delete c.activated; delete c.triggered;
-        } else {
-            delete c.power; delete c.toughness; delete c.haste; delete c.effect; delete c.activated; delete c.triggered;
-        }
+            c.effect = buildEffectStrMulti(editEffects.spell); delete c.power; delete c.toughness; delete c.haste; delete c.activated; delete c.triggered;
+        } else { delete c.power; delete c.toughness; delete c.haste; delete c.effect; delete c.activated; delete c.triggered; }
         toggleFields(); renderList(); generateCode();
     }
 
     function autoGenerateText() {
-        let lines = [];
-        // キーワード
-        let kw = [];
+        let lines = []; let kw = [];
         if(document.getElementById('e_haste').checked) kw.push("【速攻】");
         document.querySelectorAll('.kw-cb:checked').forEach(cb => kw.push(`【${ABILITY_NAME[cb.value]}】`));
         if(kw.length > 0) lines.push(kw.join(''));
 
-        let getEffText = (eff, rule, v1, v2) => {
-            let t = {"any":"対象", "cr":"対象クリーチャー", "p":"対象プレイヤー", "opp":"相手", "self":"自身", "allcr":"全クリーチャー"}[rule] || "対象";
-            if(eff==='dmg') return `${t}に${v1}ダメージ`;
-            if(eff==='heal') return `${t==='自身'?'ライフを':t+'のライフを'}${v1}回復`;
-            if(eff==='buff') return `${t}を+${v1}/+${v2}`;
-            if(eff==='buffall') return `味方全体を+${v1}/+${v2}`;
-            if(eff==='destroy') return `${t}を破壊`;
-            if(eff==='drain') return `${t}から${v1}点吸収`;
-            if(eff==='draw') return `${t==='自身'?'':t+'は'}${v1}枚ドロー`;
-            if(eff==='discard') return `${t}の手札を${v1}枚捨てさせる`;
-            if(eff==='bounce') return `${t}を手札に戻す`;
-            if(eff==='tap') return `${t}をタップさせる`;
-            if(eff==='ramp') return `マナ加速`;
-            if(eff==='token') return `${v1}/${v2}のトークンを生成`;
-            if(eff==='buffself') return `ターン終了時まで+${v1}/+${v2}`;
+        let getEffText = (e) => {
+            let t = {"any":"対象", "cr":"対象クリーチャー", "p":"対象プレイヤー", "opp":"相手", "self":"自身", "allcr":"全クリーチャー"}[e.rule] || "対象";
+            if(e.eff==='dmg') return `${t}に${e.v1}ダメージを与え`;
+            if(e.eff==='heal') return `${t==='自身'?'ライフを':t+'のライフを'}${e.v1}回復し`;
+            if(e.eff==='buff') return `${t}を+${e.v1}/+${e.v2}し`;
+            if(e.eff==='buffall') return `味方全体を+${e.v1}/+${e.v2}し`;
+            if(e.eff==='destroy') return `${t}を破壊し`;
+            if(e.eff==='drain') return `${t}から${e.v1}点吸収し`;
+            if(e.eff==='draw') return `${t==='自身'?'':t+'は'}${e.v1}枚ドローし`;
+            if(e.eff==='discard') return `${t}の手札を${e.v1}枚捨てさせ`;
+            if(e.eff==='bounce') return `${t}を手札に戻し`;
+            if(e.eff==='tap') return `${t}をタップさせ`;
+            if(e.eff==='ramp') return `マナを${e.v1}加速し`;
+            if(e.eff==='token') return `${e.v1}/${e.v2}のトークンを生成し`;
+            if(e.eff==='buffself') return `ターン終了時まで+${e.v1}/+${e.v2}し`;
             return "";
+        };
+
+        let combineTexts = (effArray) => {
+            if(effArray.length === 0) return "";
+            let text = effArray.map(e => getEffText(e)).join('、');
+            return text.replace(/し、$/, 'する。').replace(/え、$/, 'える。').replace(/させ、$/, 'させる。');
         };
 
         if(document.getElementById('e_type').value === 'CREATURE') {
             if(document.getElementById('e_act_en').checked) {
-                let cost = parseInt(document.getElementById('e_act_cost').value)||0;
-                let tap = document.getElementById('e_act_tap').checked;
-                let costStr = "";
-                if(cost > 0) costStr += "①".repeat(cost);
-                if(tap) costStr += (costStr ? ", " : "") + "タップ";
-                lines.push(`【起動】(${costStr||'0'}): ` + getEffText(document.getElementById('e_act_eff').value, document.getElementById('e_act_rule').value, document.getElementById('e_act_v1').value, document.getElementById('e_act_v2').value) + "。");
+                let cost = parseInt(document.getElementById('e_act_cost').value)||0; let tap = document.getElementById('e_act_tap').checked;
+                let costStr = ""; if(cost > 0) costStr += "①".repeat(cost); if(tap) costStr += (costStr ? ", " : "") + "タップ";
+                lines.push(`【起動】(${costStr||'0'}): ` + combineTexts(editEffects.act));
             }
             if(document.getElementById('e_tri_en').checked) {
-                let condStr = {"etb":"【出たとき】:", "death":"【死亡時】:", "upkeep":"【誘発】あなたのターン開始時、"}[document.getElementById('e_tri_cond').value];
-                lines.push(`${condStr} ` + getEffText(document.getElementById('e_tri_eff').value, document.getElementById('e_tri_rule').value, document.getElementById('e_tri_v1').value, document.getElementById('e_tri_v2').value) + "。");
+                let condStr = {"etb":"【出たとき】:", "death":"【死亡時】:", "upkeep":"【誘発】開始時、"}[document.getElementById('e_tri_cond').value];
+                lines.push(`${condStr} ` + combineTexts(editEffects.tri));
             }
-        } else if(document.getElementById('e_type').value === 'SPELL') {
-            lines.push(getEffText(document.getElementById('e_spell_eff').value, document.getElementById('e_spell_rule').value, document.getElementById('e_spell_v1').value, document.getElementById('e_spell_v2').value) + "。");
-        }
+        } else if(document.getElementById('e_type').value === 'SPELL') lines.push(combineTexts(editEffects.spell));
 
-        document.getElementById('e_text').value = lines.join('\n');
-        saveCurrent();
+        document.getElementById('e_text').value = lines.join('\n'); saveCurrent();
     }
 
-    function formatValue(val) {
-        if(typeof val === 'string') return `'${val.replace(/\n/g, '\\n')}'`;
-        if(Array.isArray(val)) return `[${val.map(v => `'${v}'`).join(', ')}]`;
-        if(typeof val === 'object' && val !== null) return JSON.stringify(val);
-        return val;
-    }
-
+    function formatValue(val) { if(typeof val === 'string') return `'${val.replace(/\n/g, '\\n')}'`; if(Array.isArray(val)) return `[${val.map(v => `'${v}'`).join(', ')}]`; if(typeof val === 'object' && val !== null) return JSON.stringify(val); return val; }
     function generateCode() {
         let out = "// 第1弾カードパックのリスト\nconst SET1_CARDS = {\n";
         let keys = Object.keys(cardsData);
-        keys.forEach((key, index) => {
-            let c = cardsData[key]; let props = [];
-            for(let p in c) { props.push(`${p}: ${formatValue(c[p])}`); }
-            out += `    ${key}: { ${props.join(', ')} }${index < keys.length - 1 ? ',' : ''}\n`;
-        });
-        out += "};\n";
-        document.getElementById('output-code').value = out;
+        keys.forEach((key, index) => { let c = cardsData[key]; let props = []; for(let p in c) { props.push(`${p}: ${formatValue(c[p])}`); } out += `    ${key}: { ${props.join(', ')} }${index < keys.length - 1 ? ',' : ''}\n`; });
+        out += "};\n"; document.getElementById('output-code').value = out;
     }
-
-    function copyCode() {
-        document.getElementById('output-code').select(); document.execCommand('copy');
-        alert("コードをコピーしました！ cards_set1.js に貼り付けてください。");
-    }
+    function copyCode() { document.getElementById('output-code').select(); document.execCommand('copy'); alert("コードをコピーしました！ cards_set1.js に貼り付けてください。"); }
 </script>
 </body>
 </html>

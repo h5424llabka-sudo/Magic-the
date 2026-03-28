@@ -308,9 +308,13 @@ function batCpuAutoBlock() {
         let attacker = BAT.player.creatures.find(c => c.uid === atkUid); if (!attacker || availableBlockers.length === 0) return;
         let validBlockers = availableBlockers.filter(b => !attacker.abilities.includes('flying') || b.abilities.includes('flying') || b.abilities.includes('reach')); if (validBlockers.length === 0) return;
         BAT.combat.blockerMap[atkUid] = []; 
+        
+        // ▼ 賢いブロックAI：一方的に勝てる、または死なない壁（防衛など）なら積極的にブロック ▼
         let bestIdx = validBlockers.findIndex(b => b.power >= attacker.toughness && b.toughness > attacker.power && !attacker.abilities.includes('deathtouch'));
+        if(bestIdx === -1) bestIdx = validBlockers.findIndex(b => b.toughness > attacker.power && !attacker.abilities.includes('deathtouch')); 
         if(bestIdx === -1) bestIdx = validBlockers.findIndex(b => b.power >= attacker.toughness || b.abilities.includes('deathtouch')); 
         if(bestIdx === -1 && BAT.cpu.life <= attacker.power) { validBlockers.sort((a,b) => a.power - b.power); bestIdx = 0; }
+        
         if (bestIdx !== -1) { BAT.combat.blockerMap[atkUid].push(validBlockers[bestIdx].uid); validBlockers[bestIdx].state = 'blocking'; availableBlockers.splice(bestIdx, 1); }
     });
 }
@@ -320,27 +324,23 @@ function batCpuAutoBlock() {
 async function playCpuMainPhase() {
     let lIdx = BAT.cpu.hand.findIndex(c=>c.type==='LAND'); if(lIdx >= 0 && !BAT.cpu.landPlayed) { BAT.cpu.lands.push(BAT.cpu.hand[lIdx]); BAT.cpu.hand.splice(lIdx,1); BAT.cpu.landPlayed = true;}
     for(let i=BAT.cpu.hand.length-1; i>=0; i--) {
-        let c = BAT.cpu.hand[i];
-        if(c.type!=='LAND' && batCanPayMana(c, BAT.cpu)) {
-            let targetObj = null;
-            // ▼ 修正：CPUがETB能力のターゲットも自動選択できるように変更 ▼
-            let effectStr = c.type === 'SPELL' ? c.effect : (c.type === 'CREATURE' && c.triggered && c.triggered.condition === 'etb' ? c.triggered.effect : null);
+        let c = BAT.cpu.hand[i]; let unLands = BAT.cpu.lands.filter(l=>!l.tapped);
+        if(c.type!=='LAND' && unLands.length >= c.cost) {
+            let targetObj = null; let effectStr = c.type === 'SPELL' ? c.effect : (c.type==='CREATURE' && c.triggered && c.triggered.condition==='etb' ? c.triggered.effect : null);
             
+            // ▼ 賢い呪文AI：無駄打ちを防ぐ ▼
             if (effectStr) {
+                if (effectStr.includes('heal') && BAT.cpu.life >= 15) continue; // ライフ満タンなら回復しない
+                if (effectStr.includes('bounce_allcr') && BAT.player.creatures.length === 0) continue; // 敵がいないなら全体バウンスしない
+                
                 let rule = effectStr.split('_')[1];
-                if (['any', 'cr', 'p'].includes(rule)) {
-                    if (effectStr.startsWith('buff') || effectStr.startsWith('heal')) {
-                        if (['any', 'cr'].includes(rule)) { let bt = [...BAT.cpu.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'cpu' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'cpu' };
-                    } else {
-                        if (['any', 'cr'].includes(rule)) { let bt = [...BAT.player.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'player' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'player' };
-                    }
+                if (effectStr.startsWith('buff') || effectStr.startsWith('heal')) {
+                    if (['any', 'cr'].includes(rule)) { let bt = [...BAT.cpu.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'cpu' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'cpu' };
+                } else {
+                    if (['any', 'cr'].includes(rule)) { let bt = [...BAT.player.creatures].sort((a,b)=>b.power - a.power)[0]; targetObj = bt ? { type: 'creature', uid: bt.uid } : (rule==='any' ? { type: 'player', id: 'player' } : null); } else if (rule === 'p') targetObj = { type: 'player', id: 'player' };
                 }
             }
-            
-            let rule = effectStr ? effectStr.split('_')[1] : null;
-            if(!effectStr || targetObj || !['any', 'cr', 'p'].includes(rule)) { 
-                await batPayAndResolve(c.uid, targetObj, true); await sleep(500); 
-            }
+            if(!effectStr || targetObj || !['any', 'cr', 'p'].includes(effectStr.split('_')[1])) { await batPayAndResolve(c.uid, targetObj, true); await sleep(500); }
         }
     }
 }

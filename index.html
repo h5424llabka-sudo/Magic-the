@@ -202,6 +202,8 @@
     
     <div id="screen-home" class="screen"><div class="header"><span>🏠 ホーム</span><button class="btn btn-small" onclick="sysResetData()">🔄 リセット</button><span class="gold">💰 <span id="ui-gold">0</span> G</span></div>
     <div class="menu-content"><h2>マナ・コロシアム</h2>
+        <button class="btn btn-blue" onclick="Tutorial.start()" style="margin-bottom: 5px; font-size:1.1rem;">🔰 実践チュートリアルをプレイ</button>
+        <button class="btn btn-small" onclick="changeScreen('screen-tutorial')" style="margin-bottom: 20px; background:#495057;">📖 文字でルールを読む</button>
         <button class="btn btn-red" onclick="uiRenderBattleMenu(); changeScreen('screen-battle-menu')">⚔️ バトルに出撃</button>
         <button class="btn btn-gold" onclick="uiRenderShopMenu(); changeScreen('screen-shop')">📦 パックを買う</button>
         <button class="btn btn-green" onclick="sysInitDeckEdit(); uiRenderDeck(); changeScreen('screen-deck')">🛠️ デッキ編成</button>
@@ -279,7 +281,58 @@
     <div id="msg-box"></div>
     <div id="modal-result" class="modal"><h1 id="res-title">勝利！</h1><p id="res-reward" style="font-size:1.5rem; color:#fcc419;">+150 G</p><button class="btn" onclick="changeScreen('screen-home'); document.getElementById('modal-result').style.display='none'">ホームへ戻る</button></div>
 
-    <script src="cards_set1.js"></script><script src="database.js"></script><script src="effects.js"></script><script src="system.js"></script><script src="battle.js"></script><script src="ui.js"></script>
+    <script src="cards_set1.js"></script><script src="database.js"></script><script src="effects.js"></script><script src="system.js"></script><script src="battle.js"></script><script src="ui.js"></script><script src="tutorial.js"></script>
     <script> window.onload = () => { sysLoadData(); }; </script>
+    <div id="screen-tutorial" class="screen" style="overflow-y:auto; background:#1a1a1a;">
+        <div class="header" style="position:sticky; top:0; z-index:100; background:#333;">
+            <span>📖 チュートリアル（遊び方）</span>
+            <button class="btn btn-small" onclick="changeScreen('screen-home')">◀ ホームに戻る</button>
+        </div>
+        
+        <div style="padding: 20px; max-width: 600px; margin: 0 auto; line-height: 1.6; color: #ddd; padding-bottom: 80px;">
+            
+            <h2 style="color: #fcc419; border-bottom: 2px solid #fcc419; padding-bottom: 5px;">1. ゲームの目的</h2>
+            <p>クリーチャーを召喚し、呪文を駆使して、<b>相手のライフ（初期値20）を 0 にすれば勝利</b>です！</p>
+
+            <h2 style="color: #3bc9db; border-bottom: 2px solid #3bc9db; padding-bottom: 5px; margin-top: 30px;">2. カードの種類</h2>
+            <ul style="background: #2b2b2b; padding: 15px 20px 15px 40px; border-radius: 8px; border: 1px solid #444;">
+                <li style="margin-bottom: 15px;"><b>🌍 土地 (LAND)</b><br>
+                マナ（コスト）を生み出すためのカードです。<b>1ターンに1枚だけ</b>手札から場に出すことができます。</li>
+                <li style="margin-bottom: 15px;"><b>⚔️ クリーチャー (CREATURE)</b><br>
+                戦いの主役です。場に出たターンは<b>「召喚酔い」</b>となり、攻撃やタップ能力が使えません（※速攻持ちを除く）。</li>
+                <li><b>🔥 呪文 (SPELL)</b><br>
+                使い捨ての魔法です。マナを支払って効果を発揮し、その後は消滅します。</li>
+            </ul>
+
+            <h2 style="color: #e03131; border-bottom: 2px solid #e03131; padding-bottom: 5px; margin-top: 30px;">3. ターンの流れ</h2>
+            <div style="background: #2b2b2b; padding: 15px; border-radius: 8px; border: 1px solid #444;">
+                <p><b style="color:#aaa;">① アンタップ ＆ ドロー</b><br>
+                自分の場にあるタップ状態（使用済みで横向き）のカードがすべて起き上がり、山札からカードを1枚引きます。</p>
+                <hr style="border-color:#444;">
+                <p><b style="color:#aaa;">② メインフェイズ 1</b><br>
+                手札から土地を出したり、土地をタップしてマナを出し、クリーチャーや呪文をプレイできます。</p>
+                <hr style="border-color:#444;">
+                <p><b style="color:#aaa;">③ 戦闘（コンバット）フェイズ</b><br>
+                相手プレイヤーに向かって攻撃を仕掛けます。<b>攻撃するクリーチャーはタップ（横向き）</b>します。<br>
+                <span style="color:#ff8787; font-size:0.9em;">※相手は自分の起きているクリーチャーを使って「ブロック（防御）」することができます。</span></p>
+                <hr style="border-color:#444;">
+                <p><b style="color:#aaa;">④ メインフェイズ 2</b><br>
+                戦闘後にも、土地を出したり（まだ出していなければ）、カードをプレイできます。</p>
+                <hr style="border-color:#444;">
+                <p><b style="color:#aaa;">⑤ エンドフェイズ</b><br>
+                ターンを終了し、クリーチャーが受けていたダメージや、一時的なステータス強化がすべてリセットされます。</p>
+            </div>
+
+            <h2 style="color: #69db7c; border-bottom: 2px solid #69db7c; padding-bottom: 5px; margin-top: 30px;">4. バトルのコツ</h2>
+            <p>✅ <b>マナカーブを意識しよう！</b><br>
+            デッキに重い（コストが高い）カードばかり入れると序盤に何もできずに負けてしまいます。軽いカードもバランス良く入れましょう。</p>
+            <p>✅ <b>ブロックの選択権は「防御側」にある！</b><br>
+            攻撃するクリーチャーは選べません。攻撃は常に「プレイヤー」に向かい、それをどのクリーチャーで防ぐかは相手が決める、という独特のルールを活かして戦いましょう。</p>
+
+            <div style="text-align: center; margin-top: 40px;">
+                <button class="btn btn-red" style="font-size: 1.2em; padding: 15px 40px;" onclick="changeScreen('screen-home')">理解した！プレイ開始</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

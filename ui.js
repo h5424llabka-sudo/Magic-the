@@ -177,16 +177,13 @@ function uiGenCardHTML(c, context='field', isPlayer=false, uniqueParam='') {
     // ② タイプ行（例：「クリーチャー」や「土地」）
     let typeText = c.type === 'LAND' ? '土地' : (c.type === 'SPELL' ? '呪文' : 'クリーチャー');
 
- // ③ 能力・効果テキスト（重複削除）
-    let abs = []; if(c.haste) abs.push('速攻'); if(c.abilities) c.abilities.forEach(a => { if(ABILITY_JP[a]) abs.push(ABILITY_JP[a]); });
-    let abHtml = abs.length > 0 ? `<b style="display:block; margin-bottom:2px;">${abs.join(', ')}</b>` : '';
-    // ▼ 追加：元のテキストから【】で囲まれた部分を削除 ▼
-    let cleanTextHTML = (c.text || '').replace(/【[^】]+】\n?/g, '').trim();
-    let textHtml = `<div class="c-text-box-mtg">${abHtml}${cleanTextHTML}</div>`;
+    // ③ 能力・効果テキスト
+    // （システム側での自動付与をオフにし、エディターで作ったテキストをそのまま表示します）
+    let textHtml = `<div class="c-text-box-mtg">${c.text || ''}</div>`;
+    
     // ④ P/Tボックス（ダメージを受けていれば赤字に）
     let dmg = c.damage || 0;
     let statsHtml = c.type === 'CREATURE' ? `<div class="c-pt-box-mtg" ${dmg>0?'style="color:#e03131"':''}>${c.power}/${c.toughness - dmg}</div>` : '';
-
     // ⑤ コストマーク
     // ▼ 変更箇所：ここでマナアイコン表示関数を呼び出す ▼
     let costHtml = uiRenderManaCost(c);

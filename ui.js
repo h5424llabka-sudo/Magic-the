@@ -510,3 +510,145 @@ function uiRenderBattleMenu() {
     document.getElementById('stage-list').innerHTML = html;
 }
 // --- ▲ 追加ここまで ▲ ---
+
+// --- ▼ デバッグ：敵デッキ一覧表示＆グラフ視覚化機能（グラフ修正版） ▼ ---
+function showDebugCpuDecks() {
+    const container = document.getElementById('debug-cpu-list');
+    let html = '';
+
+    if (typeof DB_CPU === 'undefined' || DB_CPU.length === 0) {
+        container.innerHTML = '<p style="text-align:center;">敵のデータが見つかりません。</p>';
+        document.getElementById('modal-debug-cpu').style.display = 'flex';
+        return;
+    }
+
+    DB_CPU.forEach(cpu => {
+        if (cpu.id === 'tut_cpu') return; 
+
+        html += `<div style="background: #333; padding: 15px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #555;">`;
+        html += `<h3 style="margin: 0 0 10px 0; color: #3bc9db; font-size: 1.3rem;">${cpu.name}</h3>`;
+        
+        if (!cpu.deck || cpu.deck.length === 0) {
+            html += `<p style="margin:0; color:#aaa;">デッキが設定されていません</p>`;
+        } else {
+            let costCounts = { '0':0, '1':0, '2':0, '3':0, '4':0, '5':0, '6+':0 };
+            let rarityCounts = { 'C':0, 'U':0, 'R':0, 'M':0 };
+            let landCount = 0;
+            let totalCards = cpu.deck.length;
+
+            cpu.deck.forEach(cardId => {
+                let cardObj = (typeof DB_CARDS !== 'undefined' && DB_CARDS[cardId]) ? DB_CARDS[cardId] : 
+                              (typeof SET1_CARDS !== 'undefined' && SET1_CARDS[cardId]) ? SET1_CARDS[cardId] : null;
+                
+                if(cardObj) {
+                    let r = cardObj.rarity || 'C';
+                    if(rarityCounts[r] !== undefined) rarityCounts[r]++;
+                    
+                    if(cardObj.type === 'LAND') {
+                        landCount++;
+                    } else {
+                        let c = cardObj.cost || 0;
+                        if(c >= 6) costCounts['6+']++;
+                        else costCounts[c.toString()]++;
+                    }
+                }
+            });
+
+            let maxCostCount = Math.max(...Object.values(costCounts));
+            if (maxCostCount === 0) maxCostCount = 1; 
+
+            // ▼ 修正：マナカーブの描画（高さ指定を厳密にし、グラフらしい背景を追加） ▼
+            html += `<h4 style="margin: 10px 0 5px; color: #fff; font-size: 0.95rem;">📊 マナカーブ <span style="font-size:0.7rem; color:#aaa;">(土地除く)</span></h4>`;
+            
+            // グラフの背景エリア（下線付き）
+            html += `<div style="display: flex; align-items: flex-end; height: 100px; gap: 4px; padding-top: 15px; border-bottom: 2px solid #666; background: repeating-linear-gradient(0deg, transparent, transparent 19px, #444 19px, #444 20px);">`;
+            
+            for(let cost in costCounts) {
+                let count = costCounts[cost];
+                // 棒の高さ（0枚の時は0%）
+                let heightPct = count > 0 ? (count / maxCostCount) * 100 : 0;
+                
+                // 棒グラフの1本 (height: 100% を追加して高さを確保)
+                html += `<div style="flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; position: relative;">`;
+                
+                // 枚数ラベル（棒の上）
+                html += `<span style="font-size: 0.75rem; color: #fcc419; font-weight: bold; margin-bottom: 2px;">${count > 0 ? count : ''}</span>`;
+                
+                // バー本体
+                html += `<div style="width: 100%; max-width: 25px; height: ${heightPct}%; background: linear-gradient(to top, #1c7ed6, #4dabf7); border-radius: 4px 4px 0 0; box-shadow: 0 0 5px rgba(0,0,0,0.5); transition: height 0.3s;"></div>`;
+                
+                // コストの数字（棒の下、グラフの枠外に配置）
+                html += `<span style="font-size: 0.8rem; color: #ddd; font-weight: bold; position: absolute; bottom: -20px;">${cost}</span>`;
+                
+                html += `</div>`;
+            }
+            html += `</div>`;
+            // グラフ下の余白（コストの数字用）
+            html += `<div style="height: 25px;"></div>`;
+
+            // ▼ レアリティの描画（カラーバー） ▼
+            html += `<h4 style="margin: 10px 0 5px; color: #fff; font-size: 0.95rem; border-bottom: 1px solid #555;">💎 レアリティ構成</h4>`;
+            html += `<div style="display: flex; width: 100%; height: 16px; border-radius: 8px; overflow: hidden; margin-bottom: 5px; border: 1px solid #222;">`;
+            
+            let rColors = { 'C': '#868e96', 'U': '#74c0fc', 'R': '#fcc419', 'M': '#e03131' };
+            let rLabels = { 'C': 'コモン', 'U': 'アンコモン', 'R': 'レア', 'M': '神話レア' };
+            
+            ['C', 'U', 'R', 'M'].forEach(r => {
+                let count = rarityCounts[r];
+                if(count > 0) {
+                    let pct = (count / totalCards) * 100;
+                    html += `<div style="width: ${pct}%; background-color: ${rColors[r]};" title="${rLabels[r]}: ${count}枚"></div>`;
+                }
+            });
+            html += `</div>`;
+            
+            html += `<div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #ccc;">`;
+            ['C', 'U', 'R', 'M'].forEach(r => {
+                if(rarityCounts[r] > 0) {
+                    html += `<span><span style="color:${rColors[r]}; font-size: 1.2rem; vertical-align: middle;">■</span>${rarityCounts[r]}</span>`;
+                }
+            });
+            html += `</div>`;
+
+            html += `<div style="margin-top: 15px; text-align: right; font-size: 0.9rem; color: #aaa;">`;
+            html += `土地: <span style="color:#fff; font-weight:bold;">${landCount}</span> 枚 / 合計: <span style="color:#fcc419; font-weight:bold;">${totalCards}</span> 枚`;
+            html += `</div>`;
+
+            html += `<details style="margin-top: 10px; background: #222; border-radius: 5px; padding: 5px;">`;
+            html += `<summary style="cursor: pointer; color: #8ce99a; font-size: 0.9rem; outline: none; padding: 5px;">📋 カードリスト詳細を見る</summary>`;
+            html += `<div style="margin-top: 5px; max-height: 150px; overflow-y: auto; padding: 5px;">`;
+            
+            let cardCounts = {};
+            cpu.deck.forEach(cardId => cardCounts[cardId] = (cardCounts[cardId] || 0) + 1);
+            let cardList = [];
+            for (let cardId in cardCounts) {
+                let cardObj = (typeof DB_CARDS !== 'undefined' && DB_CARDS[cardId]) ? DB_CARDS[cardId] : 
+                              (typeof SET1_CARDS !== 'undefined' && SET1_CARDS[cardId]) ? SET1_CARDS[cardId] : null;
+                cardList.push({
+                    id: cardId,
+                    name: cardObj ? cardObj.name : '不明',
+                    type: cardObj ? cardObj.type : '?',
+                    cost: cardObj ? cardObj.cost : 99,
+                    count: cardCounts[cardId]
+                });
+            }
+            cardList.sort((a, b) => {
+                if (a.type === 'LAND' && b.type !== 'LAND') return -1;
+                if (a.type !== 'LAND' && b.type === 'LAND') return 1;
+                return a.cost - b.cost;
+            });
+
+            html += `<ul style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #ddd; line-height: 1.5;">`;
+            cardList.forEach(c => {
+                let costStr = c.type === 'LAND' ? '🌍' : `🔹${c.cost}`;
+                html += `<li>${c.name} <span style="color:#888;">(${costStr})</span> × ${c.count}</li>`;
+            });
+            html += `</ul>`;
+            html += `</div></details>`;
+        }
+        html += `</div>`;
+    });
+
+    container.innerHTML = html;
+    document.getElementById('modal-debug-cpu').style.display = 'flex';
+}

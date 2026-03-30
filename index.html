@@ -202,6 +202,9 @@
     
     <div id="screen-home" class="screen"><div class="header"><span>🏠 ホーム</span><button class="btn btn-small" onclick="sysResetData()">🔄 リセット</button><span class="gold">💰 <span id="ui-gold">0</span> G</span></div>
     <div class="menu-content"><h2>マナ・コロシアム</h2>
+        <div style="text-align: right; margin-bottom: 10px;">
+            <button class="btn btn-small" onclick="showDebugCpuDecks()" style="background:#495057;">🐛 敵デッキ確認(デバッグ)</button>
+        </div>
         <button class="btn btn-blue" onclick="Tutorial.start()" style="margin-bottom: 5px; font-size:1.1rem;">🔰 実践チュートリアルをプレイ</button>
         <button class="btn btn-small" onclick="changeScreen('screen-tutorial')" style="margin-bottom: 20px; background:#495057;">📖 文字でルールを読む</button>
         <button class="btn btn-red" onclick="uiRenderBattleMenu(); changeScreen('screen-battle-menu')">⚔️ バトルに出撃</button>
@@ -332,6 +335,13 @@
             <div style="text-align: center; margin-top: 40px;">
                 <button class="btn btn-red" style="font-size: 1.2em; padding: 15px 40px;" onclick="changeScreen('screen-home')">理解した！プレイ開始</button>
             </div>
+        </div>
+    </div>
+    <div id="modal-debug-cpu" class="modal" style="z-index: 9999;">
+        <div class="modal-content" style="width: 95%; max-width: 500px; max-height: 85vh; overflow-y: auto; align-items: stretch; text-align: left; background: #222; border-color: #fcc419; color: white;">
+            <span class="modal-close" onclick="document.getElementById('modal-debug-cpu').style.display='none'" style="color: #fff; background: #e03131; border-radius: 50%; width: 30px; height: 30px; text-align: center; line-height: 25px; top: 10px; right: 10px;">×</span>
+            <h2 style="text-align: center; margin-top: 0; color: #fcc419; border-bottom: 2px solid #555; padding-bottom: 10px;">🐛 敵デッキ構成一覧</h2>
+            <div id="debug-cpu-list" style="margin-top: 10px;"></div>
         </div>
     </div>
 </body>

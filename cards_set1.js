@@ -162,7 +162,7 @@ const SET1_CARDS = {
     d_s7: { name: '殺害', type: 'SPELL', color: 'dark', cost: 3, effect: 'destroy_cr_1_1', rarity: 'U', text: '対象クリーチャーを破壊する。', abilities: [] },
     d_s8: { name: '生命吸収', type: 'SPELL', color: 'dark', cost: 6, effect: 'drain_p_4_4', rarity: 'U', text: '対象プレイヤーから4点吸収する。', abilities: [] },
     d_s9: { name: '魂の刈り取り', type: 'SPELL', color: 'dark', cost: 4, effect: 'drain_cr_4_5', rarity: 'U', text: '対象クリーチャーから4点吸収する。', abilities: [] },
-    d_s10: { name: '破滅', type: 'SPELL', color: 'dark', cost: 5, effect: 'dmg_cr_4,dmg_cr_4', rarity: 'R', text: '対象クリーチャーに4ダメージを与え、対象クリーチャーに4ダメージを与える。', abilities: [] },
+    d_s10: { name: '破滅', type: 'SPELL', color: 'dark', cost: 5, effect: 'dmg_cr_4_4_2', rarity: 'R', text: '対象クリーチャー2体にそれぞれ4ダメージを与える。', abilities: [] },
     d_s11: { name: '滅び', type: 'SPELL', color: 'dark', cost: 6, effect: 'destroy_allcr_1_1', rarity: 'R', text: '全クリーチャーを破壊する。', abilities: [] },
     d_s12: { name: '死の宣告', type: 'SPELL', color: 'dark', cost: 4, effect: 'drain_any_2_2,discard_opp_1_1,draw_self_1', rarity: 'M', text: '対象から2点吸収し、相手の手札を1枚捨てさせ、1枚ドローする。', abilities: [] }
 };

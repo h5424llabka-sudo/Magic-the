@@ -348,6 +348,28 @@ function uiDrawBlockLines() {
     if (!svg) return;
     
     let linesHtml = "";
+    // ▼ここから追加：ターゲット選択中の赤い線▼
+    if (BAT.phase === 'TARGETING' && BAT.pendingTargets.length > 0) {
+        let srcEl = document.getElementById(`card-${BAT.sourceCardUid}`);
+        if (srcEl) {
+            let sRect = srcEl.getBoundingClientRect();
+            let sx = sRect.left + sRect.width/2; 
+            let sy = sRect.top + sRect.height/2;
+
+            BAT.pendingTargets.forEach(target => {
+                let dstEl = target.type === 'player' ? 
+                    document.getElementById(target.id === 'player' ? 'player-avatar' : 'cpu-avatar') : 
+                    document.getElementById(`card-${target.uid}`);
+                
+                if (dstEl) {
+                    let dRect = dstEl.getBoundingClientRect();
+                    let dx = dRect.left + dRect.width/2; 
+                    let dy = dRect.top + dRect.height/2;
+                    linesHtml += `<line x1="${sx}" y1="${sy}" x2="${dx}" y2="${dy}" stroke="red" stroke-width="4" stroke-dasharray="5,5" />`;
+                }
+            });
+        }
+    }
     if (!BAT.active || (BAT.phase !== 'BLOCK' && BAT.phase !== 'ORDER_BLOCKERS' && BAT.phase !== 'ATTACK')) {
         svg.innerHTML = ''; return;
     }

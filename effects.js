@@ -3,13 +3,12 @@
 // 【effects.js 修正箇所①：MagicEngine の先頭を上書き】
 
 const MagicEngine = {
-    async resolve(effectStr, playerObj, oppObj, initialTargetObj, sourceCard = null) {
+async resolve(effectStr, playerObj, oppObj, initialTargetObj, sourceCard = null) {
         if (!effectStr) return;
         let effects = effectStr.split(','); 
-        let isCpu = (playerObj === BAT.cpu); // CPUの行動かどうか判定
-        
-        // 1回目の効果は最初に選んだ対象を使用
-        let currentTargetObj = initialTargetObj;
+
+        // ★ initialTargetObj が単体でも配列（複数対象）でも対応できるようにする
+        let targetList = Array.isArray(initialTargetObj) ? initialTargetObj : [initialTargetObj];
 
         for (let i = 0; i < effects.length; i++) {
             let eStr = effects[i];
@@ -17,26 +16,26 @@ const MagicEngine = {
             let eff = parts[0]; let rule = parts[1]; 
             let val1 = parseInt(parts[2]) || 0; 
             let val2 = parseInt(parts[3] || parts[2]) || 0;
-            
-            // ▼ 2回目以降で「対象を取る効果」の場合、新しく対象を選ばせる ▼
-            if (i > 0 && ['cr', 'p', 'any'].includes(rule)) {
-                currentTargetObj = await this.waitForNextTarget(rule, playerObj, oppObj, isCpu);
-                if (!currentTargetObj) continue; // 対象がいなければこの効果をスキップ
-            }
+            let count = parseInt(parts[4]) || 1; // ★ 対象数を取得
 
-            let tCr = null; let tP = null;
-            if (currentTargetObj) {
-                if(currentTargetObj.type === 'creature') tCr = playerObj.creatures.find(c=>c.uid === currentTargetObj.uid) || oppObj.creatures.find(c=>c.uid === currentTargetObj.uid); 
-                else if(currentTargetObj.type === 'player') tP = currentTargetObj.id === (playerObj === BAT.cpu ? 'cpu' : 'player') ? playerObj : oppObj; 
-            }
+            // ★ 対象の数（count）の分だけループして効果を適用する
+            for (let tIndex = 0; tIndex < Math.min(count, targetList.length); tIndex++) {
+                let currentTargetObj = targetList[tIndex];
+                if (!currentTargetObj) continue;
 
-            if (this[eff]) {
-                await this[eff](rule, val1, val2, playerObj, oppObj, tCr, tP, sourceCard);
-                if (typeof uiRenderBattle === 'function') uiRenderBattle();
-                await new Promise(r => setTimeout(r, 600)); 
-            } else {
-                console.warn("未実装の能力です:", eff);
+                let tCr = null; let tP = null;
+                if(currentTargetObj.type === 'creature') {
+                    tCr = playerObj.creatures.find(c=>c.uid === currentTargetObj.uid) || oppObj.creatures.find(c=>c.uid === currentTargetObj.uid); 
+                } else if(currentTargetObj.type === 'player') {
+                    tP = currentTargetObj.id === (playerObj === BAT.cpu ? 'cpu' : 'player') ? playerObj : oppObj; 
+                }
+
+                if (this[eff]) {
+                    await this[eff](rule, val1, val2, playerObj, oppObj, tCr, tP, sourceCard);
+                }
             }
+            if (typeof uiRenderBattle === 'function') uiRenderBattle();
+            await new Promise(r => setTimeout(r, 600)); // アニメーション・ログ待機
         }
     },
 

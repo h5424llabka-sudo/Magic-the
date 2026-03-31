@@ -43,7 +43,11 @@ let BAT = {
     player: { life: 15, deck: [], hand: [], lands: [], creatures: [], landPlayed: false },
     cpu: { life: 15, deck: [], hand: [], lands: [], creatures: [], landPlayed: false, id: null, reward: 0 },
     combat: { attackers: [], blockerMap: {} }, pendingSpell: null, pendingAbility: null, orderingList: [], currentOrderAttacker: null, currentOrderSelected: [],
-    isFirstTurn: true // ▼ 追加：先攻1ターン目のドロー制御用 ▼
+    isFirstTurn: true, // ▼ 追加：先攻1ターン目のドロー制御用 ▼
+    // BATオブジェクトの中に追加
+    pendingTargets: [],      // 選択中の対象を入れる配列
+    requiredTargetCount: 1,  // 選ぶべき対象の数
+    sourceCardUid: null,     // 魔法を使っているカードのUID（線引き用）
 };
 let uidCounter = 0;
 function createBattleCard(idKey) { let data = DB_CARDS[idKey]; return { uid: ++uidCounter, idKey: idKey, ...data, abilities: data.abilities || [], tapped: false, sickness: false, damage: 0, state: 'normal', deathtouchKilled: false }; }
@@ -184,29 +188,33 @@ async function batPlayCard(uid) {
 
 function batCancelTargeting() { BAT.phase = BAT.prevPhase; BAT.pendingSpell = null; BAT.pendingAbility = null; BAT.isProcessing = false; uiRenderBattle(); }
 
+// 【以下のコードで batSelectTarget 関数をまるごと上書きします】
 async function batSelectTarget(targetObj) {
-    if (BAT.phase !== 'TARGETING' || BAT.isProcessing) return;
-    BAT.isProcessing = true; uiRenderBattle();
+    if (BAT.phase !== 'TARGETING') return;
 
-    try {
-        if (BAT.pendingSpell) {
-            await batPayAndResolve(BAT.pendingSpell, targetObj, false);
-        } else if (BAT.pendingAbility) {
-            await batResolveAbility(BAT.pendingAbility, targetObj, false);
-        }
-    } catch (e) {
-        console.error("ターゲット解決中にエラーが発生しました:", e);
-        uiShowMsg("エラー発生: 処理を中断します");
+    // 既に選ばれている対象はスキップ（同じ対象を2回選べないようにする）
+    if (BAT.pendingTargets.some(t => t.type === targetObj.type && t.uid === targetObj.uid)) {
+        uiShowMsg("その対象は既に選ばれています");
+        return;
     }
-    
-    // 万が一エラーが起きても、フリーズさせずに操作可能な状態に戻す安全装置
-    if (BAT.phase === 'TARGETING') {
+
+    BAT.pendingTargets.push(targetObj);
+    uiRenderBattle(); // 選択した対象に赤い線を引くために画面更新
+
+// 必要な対象数に達したかチェック
+    if (BAT.pendingTargets.length >= BAT.requiredTargetCount) {
+        let targets = [...BAT.pendingTargets];
+        BAT.pendingTargets = []; // リセット
         BAT.phase = BAT.prevPhase;
-        BAT.pendingSpell = null;
-        BAT.pendingAbility = null;
+        
+        if (BAT.pendingSpell) {
+            batPayAndResolve(BAT.pendingSpell, targets); // ★ ここを書き換える
+        } else if (BAT.pendingAbility) {
+            batResolveAbility(BAT.pendingAbility, targets);
+        }
+    } else {
+        uiShowMsg(`あと ${BAT.requiredTargetCount - BAT.pendingTargets.length} 体選んでください`, 2000);
     }
-    BAT.isProcessing = false;
-    uiRenderBattle();
 }
 
 // 【battle.js 置き換え箇所②：batPayAndResolve 関数】

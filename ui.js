@@ -1,6 +1,15 @@
 function changeScreen(screenId) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(screenId).classList.add('active'); if(screenId === 'screen-home') uiRenderHome(); }
-function uiShowMsg(text, ms = 1500) { let box = document.getElementById('msg-box'); box.innerText = text; box.style.display = 'block'; setTimeout(() => box.style.display = 'none', ms); }
+let msgTimeout = null; // ▼ タイマー管理用の変数を追加
 
+function uiShowMsg(text, ms = 1500) { 
+    let box = document.getElementById('msg-box'); 
+    box.innerText = text; 
+    box.style.display = 'block'; 
+    
+    // ▼ 修正：連続で呼ばれた時に、前の非表示タイマーをキャンセルして表示を維持する ▼
+    if (msgTimeout) clearTimeout(msgTimeout);
+    msgTimeout = setTimeout(() => box.style.display = 'none', ms); 
+}
 let selectedDefenderUid = null; 
 const ABILITY_JP = { 'flying':'飛', 'first_strike':'先', 'deathtouch':'接', 'trample':'貫', 'vigilance':'警', 'lifelink':'絆', 'defender':'防', 'reach':'到' };
 const ATTR_JP = { 'fire':'🔥火', 'forest':'🌲森', 'water':'💧水', 'light':'✨光', 'dark':'🌑闇' };

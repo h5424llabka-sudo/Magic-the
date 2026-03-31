@@ -1,29 +1,77 @@
 // 【effects.js まるごと置き換え】
 
+// 【effects.js 修正箇所①：MagicEngine の先頭を上書き】
+
 const MagicEngine = {
-    // ▼ 修正：カンマ区切りで複数の効果を順番に解決できるように対応 ▼
-    async resolve(effectStr, playerObj, oppObj, targetObj, sourceCard = null) {
+    async resolve(effectStr, playerObj, oppObj, initialTargetObj, sourceCard = null) {
         if (!effectStr) return;
-        let effects = effectStr.split(','); // カンマで分割
+        let effects = effectStr.split(','); 
+        let isCpu = (playerObj === BAT.cpu); // CPUの行動かどうか判定
         
-        for (let eStr of effects) {
+        // 1回目の効果は最初に選んだ対象を使用
+        let currentTargetObj = initialTargetObj;
+
+        for (let i = 0; i < effects.length; i++) {
+            let eStr = effects[i];
             let parts = eStr.trim().split('_'); 
             let eff = parts[0]; let rule = parts[1]; 
             let val1 = parseInt(parts[2]) || 0; 
             let val2 = parseInt(parts[3] || parts[2]) || 0;
             
+            // ▼ 2回目以降で「対象を取る効果」の場合、新しく対象を選ばせる ▼
+            if (i > 0 && ['cr', 'p', 'any'].includes(rule)) {
+                currentTargetObj = await this.waitForNextTarget(rule, playerObj, oppObj, isCpu);
+                if (!currentTargetObj) continue; // 対象がいなければこの効果をスキップ
+            }
+
             let tCr = null; let tP = null;
-            if (targetObj) {
-                if(targetObj.type === 'creature') tCr = playerObj.creatures.find(c=>c.uid === targetObj.uid) || oppObj.creatures.find(c=>c.uid === targetObj.uid); 
-                else if(targetObj.type === 'player') tP = targetObj.id === (playerObj === BAT.cpu ? 'cpu' : 'player') ? playerObj : oppObj; 
+            if (currentTargetObj) {
+                if(currentTargetObj.type === 'creature') tCr = playerObj.creatures.find(c=>c.uid === currentTargetObj.uid) || oppObj.creatures.find(c=>c.uid === currentTargetObj.uid); 
+                else if(currentTargetObj.type === 'player') tP = currentTargetObj.id === (playerObj === BAT.cpu ? 'cpu' : 'player') ? playerObj : oppObj; 
             }
 
             if (this[eff]) {
                 await this[eff](rule, val1, val2, playerObj, oppObj, tCr, tP, sourceCard);
-                await new Promise(r => setTimeout(r, 300)); // 複数効果の間に少しウェイト
-            } else console.warn("未実装の能力です:", eff);
+                if (typeof uiRenderBattle === 'function') uiRenderBattle();
+                await new Promise(r => setTimeout(r, 600)); 
+            } else {
+                console.warn("未実装の能力です:", eff);
+            }
         }
     },
+
+    // ▼ 追加：連続効果の際に途中で対象を選ばせる関数 ▼
+    async waitForNextTarget(rule, playerObj, oppObj, isCpu) {
+        // 選べる対象が場にいるか事前チェック（誰もいないなら自動スキップ）
+        let validCount = 0;
+        if (rule === 'cr' || rule === 'any') validCount += playerObj.creatures.length + oppObj.creatures.length;
+        if (rule === 'p' || rule === 'any') validCount += 2;
+        if (validCount === 0) return null;
+
+        if (isCpu) {
+            // CPUはランダムに自動選択
+            await new Promise(r => setTimeout(r, 600));
+            let valid = [];
+            if (rule === 'cr' || rule === 'any') {
+                valid.push(...playerObj.creatures.map(c => ({type:'creature', uid: c.uid})));
+                valid.push(...oppObj.creatures.map(c => ({type:'creature', uid: c.uid})));
+            }
+            if (rule === 'p' || rule === 'any') {
+                valid.push({type:'player', id:'player'}, {type:'player', id:'cpu'});
+            }
+            return valid[Math.floor(Math.random() * valid.length)];
+        } else {
+            // プレイヤーの入力待ち状態にする
+            uiShowMsg("連続効果！次の対象を選んでください", 0); // 0は文字を自動で消さない設定
+            return new Promise(resolve => {
+                // グローバル変数に「待機状態」をセット
+                window._midEffectTargetResolve = resolve;
+                window._midEffectTargetRule = rule;
+            });
+        }
+    },
+
+    // ... （これ以降の dmg: などの処理はそのまま残してください）
 
     dmg: (rule, v1, v2, p, opp, tCr, tP) => {
         if(rule === 'allcr') { p.creatures.concat(opp.creatures).forEach(c => c.damage += v1); uiShowMsg(`💥 全体に${v1}ダメージ！`); }
@@ -115,3 +163,48 @@ const AbilityManager = {
         if (card.activated) await MagicEngine.resolve(card.activated.effect, playerObj, oppObj, targetObj, card);
     }
 };
+
+// 【effects.js 修正箇所②：ファイルの一番下に追記】
+
+// ▼ 連続効果のためのクリック乗っ取りシステム ▼
+if (!window._patchedForMultiTarget) {
+    window._patchedForMultiTarget = true;
+    
+    // クリーチャークリックの監視
+    const origBatClickCreature = window.batClickCreature;
+    if (typeof window.batClickCreature === 'function') {
+        window.batClickCreature = function(uid, isCpuField) {
+            // 連続効果の待機中であれば、クリックを「対象選択」として処理
+            if (window._midEffectTargetResolve) {
+                let rule = window._midEffectTargetRule;
+                if (rule === 'p') { uiShowMsg("プレイヤーを選んでください！", 1500); return; }
+                
+                uiShowMsg("対象を決定しました！", 1000);
+                let resolveFn = window._midEffectTargetResolve;
+                window._midEffectTargetResolve = null; // 待機状態を解除
+                resolveFn({ type: 'creature', uid: uid });
+                return; // 本来の攻撃などの処理をここでキャンセル
+            }
+            origBatClickCreature(uid, isCpuField);
+        };
+    }
+
+    // プレイヤークリックの監視
+    const origBatClickPlayer = window.batClickPlayer;
+    if (typeof window.batClickPlayer === 'function') {
+        window.batClickPlayer = function(isCpuField) {
+            // 連続効果の待機中であれば、クリックを「対象選択」として処理
+            if (window._midEffectTargetResolve) {
+                let rule = window._midEffectTargetRule;
+                if (rule === 'cr') { uiShowMsg("クリーチャーを選んでください！", 1500); return; }
+                
+                uiShowMsg("対象を決定しました！", 1000);
+                let resolveFn = window._midEffectTargetResolve;
+                window._midEffectTargetResolve = null;
+                resolveFn({ type: 'player', id: isCpuField ? 'cpu' : 'player' });
+                return;
+            }
+            origBatClickPlayer(isCpuField);
+        };
+    }
+}

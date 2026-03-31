@@ -153,6 +153,7 @@
         document.getElementById('card-list').innerHTML = listStr;
     }
 
+    // 1. 描画部分（「対象数」の入力枠を追加）
     function renderEffectsList(type) {
         let html = '';
         editEffects[type].forEach((eff, idx) => {
@@ -173,29 +174,51 @@
                 </select>
                 値1: <input type="number" style="width:40px" value="${eff.v1}" oninput="updateEffect('${type}', ${idx}, 'v1', this.value)">
                 値2: <input type="number" style="width:40px" value="${eff.v2}" oninput="updateEffect('${type}', ${idx}, 'v2', this.value)">
+                
+                対象数: <input type="number" style="width:40px" value="${eff.count || 1}" min="1" oninput="updateEffect('${type}', ${idx}, 'count', parseInt(this.value)||1)">
+                
                 <button class="btn btn-red btn-small" onclick="removeEffectRow('${type}', ${idx})">✕</button>
             </div>`;
         });
         document.getElementById(`${type}-eff-list`).innerHTML = html;
     }
 
-    function addEffectRow(type) { editEffects[type].push({eff: 'dmg', rule: 'any', v1: 1, v2: 0}); renderEffectsList(type); saveCurrent(); }
+    // 2. 新規追加部分（count: 1 を初期値として持たせる）
+    function addEffectRow(type) { 
+        editEffects[type].push({eff: 'dmg', rule: 'any', v1: 1, v2: 0, count: 1}); 
+        renderEffectsList(type); 
+        saveCurrent(); 
+    }
     function removeEffectRow(type, idx) { editEffects[type].splice(idx, 1); renderEffectsList(type); saveCurrent(); }
     function updateEffect(type, idx, key, val) { editEffects[type][idx][key] = val; saveCurrent(); }
 
+    // 3. データ読み込み部分（5番目の要素として対象数を読み込む）
     function parseEffectStrMulti(str) {
         if(!str) return [];
         return str.split(',').map(s => {
             let p = s.trim().split('_');
-            return { eff: p[0]||'dmg', rule: p[1]||'any', v1: parseInt(p[2])||0, v2: parseInt(p[3]||p[2])||0 };
+            return { 
+                eff: p[0]||'dmg', 
+                rule: p[1]||'any', 
+                v1: parseInt(p[2])||0, 
+                v2: parseInt(p[3]||p[2])||0,
+                count: parseInt(p[4])||1 // 5番目の値(対象数)
+            };
         });
     }
 
+    // 4. コード出力部分（文字列の最後に _対象数 を付与する）
     function buildEffectStrMulti(effArray) {
         return effArray.map(e => {
-            let s = `${e.eff}_${e.rule}`;
-            if(e.v1) s += `_${e.v1}`; if(e.v2 && e.v2 !== "0" && e.v2 !== 0) s += `_${e.v2}`;
-            return s;
+            let v1 = e.v1 || 0;
+            let v2 = e.v2 || 0;
+            let c = e.count || 1;
+            
+            // 対象数が2以上なら、必ず5番目の値まで出力する
+            if (c > 1) return `${e.eff}_${e.rule}_${v1}_${v2}_${c}`;
+            if (e.v2) return `${e.eff}_${e.rule}_${v1}_${v2}`;
+            if (e.v1) return `${e.eff}_${e.rule}_${v1}`;
+            return `${e.eff}_${e.rule}`;
         }).join(',');
     }
 
@@ -247,8 +270,7 @@
         toggleFields(); renderList(); generateCode();
     }
 
-// 【editor.html 置き換え箇所：autoGenerateText 関数をまるごと】
-
+    // 5. テキスト自動生成部分（対象数が2以上のとき「〇体にそれぞれ」とする）
     function autoGenerateText() {
         let lines = []; let kw = [];
         if(document.getElementById('e_haste').checked) kw.push("速攻");
@@ -256,17 +278,26 @@
         if(kw.length > 0) lines.push(`[${kw.join(', ')}]`); 
 
         let getEffText = (e) => {
-            let t = {"any":"対象", "cr":"対象クリーチャー", "p":"対象プレイヤー", "opp":"相手", "self":"自身", "allcr":"全クリーチャー"}[e.rule] || "対象";
-            if(e.eff==='dmg') return `${t}に${e.v1}ダメージを与え`;
-            if(e.eff==='heal') return `${t==='自身'?'ライフを':t+'のライフを'}${e.v1}回復し`;
-            if(e.eff==='buff') return `${t}を+${e.v1}/+${e.v2}し`;
+            let baseTgt = {"any":"対象", "cr":"対象クリーチャー", "p":"対象プレイヤー", "opp":"相手", "self":"自身", "allcr":"全クリーチャー"}[e.rule] || "対象";
+            
+            // ▼ 対象数によるテキストの変更 ▼
+            let c = e.count || 1;
+            let tgt = baseTgt;
+            if (c > 1) {
+                if (['cr', 'any'].includes(e.rule)) tgt = `${baseTgt}${c}体にそれぞれ`;
+                else if (e.rule === 'p') tgt = `${baseTgt}${c}人にそれぞれ`;
+            }
+
+            if(e.eff==='dmg') return `${tgt}に${e.v1}ダメージを与え`;
+            if(e.eff==='heal') return `${tgt==='自身'?'ライフを':tgt+'のライフを'}${e.v1}回復し`;
+            if(e.eff==='buff') return `${tgt}を+${e.v1}/+${e.v2}し`;
             if(e.eff==='buffall') return `味方全体を+${e.v1}/+${e.v2}し`;
-            if(e.eff==='destroy') return `${t}を破壊し`;
-            if(e.eff==='drain') return `${t}から${e.v1}点吸収し`;
-            if(e.eff==='draw') return `${t==='自身'?'':t+'は'}${e.v1}枚ドローし`;
-            if(e.eff==='discard') return `${t}の手札を${e.v1}枚捨てさせ`;
-            if(e.eff==='bounce') return `${t}を手札に戻し`;
-            if(e.eff==='tap') return `${t}をタップさせ`;
+            if(e.eff==='destroy') return `${tgt}を破壊し`;
+            if(e.eff==='drain') return `${tgt}から${e.v1}点吸収し`;
+            if(e.eff==='draw') return `${tgt==='自身'?'':tgt+'は'}${e.v1}枚ドローし`;
+            if(e.eff==='discard') return `${tgt}の手札を${e.v1}枚捨てさせ`;
+            if(e.eff==='bounce') return `${tgt}を手札に戻し`;
+            if(e.eff==='tap') return `${tgt}をタップさせ`;
             if(e.eff==='ramp') return `マナを${e.v1}加速し`;
             if(e.eff==='token') return `${e.v1}/${e.v2}のトークンを生成し`;
             if(e.eff==='buffself') return `ターン終了時まで+${e.v1}/+${e.v2}し`;
@@ -275,14 +306,8 @@
 
         let combineTexts = (effArray) => {
             if(effArray.length === 0) return "";
-            // 複数の効果を「、」でつなぐ
             let text = effArray.map(e => getEffText(e)).join('、');
-            
-            // ▼ 修正：文章の最後（$）の言葉を、言い切りの形（終止形）に正しく変換する ▼
-            return text.replace(/戻し$/, '戻す。')
-                       .replace(/し$/, 'する。')
-                       .replace(/与え$/, '与える。')
-                       .replace(/させ$/, 'させる。');
+            return text.replace(/戻し$/, '戻す。').replace(/し$/, 'する。').replace(/与え$/, '与える。').replace(/させ$/, 'させる。');
         };
 
         if(document.getElementById('e_type').value === 'CREATURE') {

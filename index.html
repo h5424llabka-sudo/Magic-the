@@ -284,7 +284,34 @@
     <div id="msg-box"></div>
     <div id="modal-result" class="modal"><h1 id="res-title">勝利！</h1><p id="res-reward" style="font-size:1.5rem; color:#fcc419;">+150 G</p><button class="btn" onclick="changeScreen('screen-home'); document.getElementById('modal-result').style.display='none'">ホームへ戻る</button></div>
 
-    <script src="cards_set1.js"></script><script src="database.js"></script><script src="effects.js"></script><script src="system.js"></script><script src="battle.js"></script><script src="ui.js"></script><script src="tutorial.js"></script>
+<script>
+        // 🌟 ここが「一箇所」のバージョン管理部分！
+        // アップデートしたら、ここの数字を '1.1' や '2' などに変更するだけ
+        const APP_VERSION = "1.0"; 
+
+        // 読み込むJSファイルのリスト（※元の順番通りに並べてください）
+        const scripts = [
+            "database.js",
+            "system.js",
+            "effects.js",
+            "battle.js",
+            "tutorial.js",
+            "ui.js"
+        ];
+
+        // リストのファイルを順番に読み込む処理
+        scripts.forEach(fileName => {
+            let scriptTag = document.createElement('script');
+            // ファイル名の後ろに自動で「?v=バージョン」をくっつける
+            scriptTag.src = fileName + "?v=" + APP_VERSION;
+            // 重要：リストの順番通りに確実に読み込ませるための魔法のおまじない
+            scriptTag.async = false; 
+            
+            document.body.appendChild(scriptTag);
+        });
+    </script>
+</body>
+</html>
     <script> window.onload = () => { sysLoadData(); }; </script>
     <div id="screen-tutorial" class="screen" style="overflow-y:auto; background:#1a1a1a;">
         <div class="header" style="position:sticky; top:0; z-index:100; background:#333;">

@@ -208,3 +208,55 @@ if (!window._patchedForMultiTarget) {
         };
     }
 }
+// 【effects.js の一番下に追記】
+// ▼ 連続効果のためのクリック強制割り込みシステム ▼
+if (!window._patchedForMultiTarget) {
+    window._patchedForMultiTarget = true;
+    
+    // true（キャプチャフェーズ）を指定することで、他のどんなクリック処理よりも先に発動させます
+    document.addEventListener('click', function(e) {
+        if (typeof window._midEffectTargetResolve === 'function') {
+            // クリックされた要素（またはその親）が onclick 属性を持っているか調べる
+            let el = e.target.closest('[onclick]');
+            if (!el) return;
+
+            let oc = el.getAttribute('onclick');
+
+            // フェイズ進行ボタンなどの場合は無視する
+            if (oc.includes('Phase') || oc.includes('Turn') || oc.includes('Action') || oc.includes('changeScreen')) {
+                return;
+            }
+
+            // --- ① クリーチャーがクリックされたか判定 ---
+            // onclick="〇〇〇(1234)" のように、カッコ内に数字(uid)が含まれているものをクリーチャーとみなす
+            let uidMatch = oc.match(/\(?(\d+)\)?/);
+            if (uidMatch) {
+                e.stopPropagation(); // 本来の攻撃などの処理をここでストップ
+                e.preventDefault();
+
+                let resolve = window._midEffectTargetResolve;
+                window._midEffectTargetResolve = null; // 待機状態を解除
+                uiShowMsg("対象を決定しました！", 1000);
+                resolve({ type: 'creature', uid: parseInt(uidMatch[1]) });
+                return;
+            }
+
+            // --- ② プレイヤーがクリックされたか判定 ---
+            if (oc.toLowerCase().includes('player') || oc.toLowerCase().includes('cpu') || el.id.includes('player') || el.id.includes('cpu')) {
+                e.stopPropagation();
+                e.preventDefault();
+
+                let isCpu = oc.toLowerCase().includes('cpu') || el.id.includes('cpu');
+                let resolve = window._midEffectTargetResolve;
+                window._midEffectTargetResolve = null;
+                uiShowMsg("対象を決定しました！", 1000);
+                resolve({ type: 'player', id: isCpu ? 'cpu' : 'player' });
+                return;
+            }
+            
+            // それ以外（背景など）をクリックした場合は警告を出す
+            e.stopPropagation();
+            uiShowMsg("正しい対象（クリーチャーかプレイヤー）をクリックしてください", 1500);
+        }
+    }, true);
+}

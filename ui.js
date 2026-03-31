@@ -661,3 +661,20 @@ function showDebugCpuDecks() {
     container.innerHTML = html;
     document.getElementById('modal-debug-cpu').style.display = 'flex';
 }
+function debugAddCard() {
+    let id = prompt("入手したいカードIDを入力してください\n(例: d_s10, f_c16 など)");
+    if (!id || !DB_CARDS[id]) {
+        alert("有効なIDではありません。");
+        return;
+    }
+    
+    // 現在のバトル中のプレイヤー手札に強制注入
+    const newCard = JSON.parse(JSON.stringify({ 
+        ...DB_CARDS[id], idKey: id, uid: ++uidCounter, 
+        sickness: false, damage: 0, tapped: false, state: 'normal' 
+    }));
+    
+    BAT.player.hand.push(newCard);
+    uiRenderBattle(); // 画面を更新
+    uiShowMsg(newCard.name + " を手札に加えました");
+}

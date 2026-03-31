@@ -1,74 +1,44 @@
-// 【effects.js まるごと置き換え】
-
-// 【effects.js 修正箇所①：MagicEngine の先頭を上書き】
-
+// effects.js の MagicEngine.resolve を修正
 const MagicEngine = {
-async resolve(effectStr, playerObj, oppObj, initialTargetObj, sourceCard = null) {
+    async resolve(effectStr, playerObj, oppObj, targetObjOrArray, sourceCard = null) {
         if (!effectStr) return;
         let effects = effectStr.split(','); 
+        
+        // ターゲットを常に配列として正規化
+        let targets = Array.isArray(targetObjOrArray) ? targetObjOrArray : (targetObjOrArray ? [targetObjOrArray] : []);
 
-        // ★ initialTargetObj が単体でも配列（複数対象）でも対応できるようにする
-        let targetList = Array.isArray(initialTargetObj) ? initialTargetObj : [initialTargetObj];
-
-        for (let i = 0; i < effects.length; i++) {
-            let eStr = effects[i];
+        for (let eStr of effects) {
             let parts = eStr.trim().split('_'); 
             let eff = parts[0]; let rule = parts[1]; 
             let val1 = parseInt(parts[2]) || 0; 
             let val2 = parseInt(parts[3] || parts[2]) || 0;
-            let count = parseInt(parts[4]) || 1; // ★ 対象数を取得
-
-            // ★ 対象の数（count）の分だけループして効果を適用する
-            for (let tIndex = 0; tIndex < Math.min(count, targetList.length); tIndex++) {
-                let currentTargetObj = targetList[tIndex];
-                if (!currentTargetObj) continue;
-
-                let tCr = null; let tP = null;
-                if(currentTargetObj.type === 'creature') {
-                    tCr = playerObj.creatures.find(c=>c.uid === currentTargetObj.uid) || oppObj.creatures.find(c=>c.uid === currentTargetObj.uid); 
-                } else if(currentTargetObj.type === 'player') {
-                    tP = currentTargetObj.id === (playerObj === BAT.cpu ? 'cpu' : 'player') ? playerObj : oppObj; 
+            
+            // 対象をとる効果の場合
+            if (['cr', 'p', 'any'].includes(rule) && targets.length > 0) {
+                // 選ばれたすべての対象に対して実行
+                for (let tgt of targets) {
+                    let tCr = null; let tP = null;
+                    if(tgt.type === 'creature') {
+                        tCr = playerObj.creatures.find(c=>c.uid === tgt.uid) || oppObj.creatures.find(c=>c.uid === tgt.uid); 
+                    } else if(tgt.type === 'player') {
+                        tP = tgt.id === (playerObj === BAT.cpu ? 'cpu' : 'player') ? playerObj : oppObj; 
+                    }
+                    
+                    if (this[eff]) {
+                        await this[eff](rule, val1, val2, playerObj, oppObj, tCr, tP, sourceCard);
+                    }
                 }
-
+            } else {
+                // 全体効果など（対象をとらない場合）
                 if (this[eff]) {
-                    await this[eff](rule, val1, val2, playerObj, oppObj, tCr, tP, sourceCard);
+                    await this[eff](rule, val1, val2, playerObj, oppObj, null, null, sourceCard);
                 }
             }
-            if (typeof uiRenderBattle === 'function') uiRenderBattle();
-            await new Promise(r => setTimeout(r, 600)); // アニメーション・ログ待機
+            uiRenderBattle();
+            await new Promise(r => setTimeout(r, 400));
         }
     },
-
-    // ▼ 追加：連続効果の際に途中で対象を選ばせる関数 ▼
-    async waitForNextTarget(rule, playerObj, oppObj, isCpu) {
-        // 選べる対象が場にいるか事前チェック（誰もいないなら自動スキップ）
-        let validCount = 0;
-        if (rule === 'cr' || rule === 'any') validCount += playerObj.creatures.length + oppObj.creatures.length;
-        if (rule === 'p' || rule === 'any') validCount += 2;
-        if (validCount === 0) return null;
-
-        if (isCpu) {
-            // CPUはランダムに自動選択
-            await new Promise(r => setTimeout(r, 600));
-            let valid = [];
-            if (rule === 'cr' || rule === 'any') {
-                valid.push(...playerObj.creatures.map(c => ({type:'creature', uid: c.uid})));
-                valid.push(...oppObj.creatures.map(c => ({type:'creature', uid: c.uid})));
-            }
-            if (rule === 'p' || rule === 'any') {
-                valid.push({type:'player', id:'player'}, {type:'player', id:'cpu'});
-            }
-            return valid[Math.floor(Math.random() * valid.length)];
-        } else {
-            // プレイヤーの入力待ち状態にする
-            uiShowMsg("連続効果！次の対象を選んでください", 0); // 0は文字を自動で消さない設定
-            return new Promise(resolve => {
-                // グローバル変数に「待機状態」をセット
-                window._midEffectTargetResolve = resolve;
-                window._midEffectTargetRule = rule;
-            });
-        }
-    },
+    // ... dmg, heal 等の定義 ...
 
     // ... （これ以降の dmg: などの処理はそのまま残してください）
 
@@ -163,99 +133,3 @@ const AbilityManager = {
     }
 };
 
-// 【effects.js 修正箇所②：ファイルの一番下に追記】
-
-// ▼ 連続効果のためのクリック乗っ取りシステム ▼
-if (!window._patchedForMultiTarget) {
-    window._patchedForMultiTarget = true;
-    
-    // クリーチャークリックの監視
-    const origBatClickCreature = window.batClickCreature;
-    if (typeof window.batClickCreature === 'function') {
-        window.batClickCreature = function(uid, isCpuField) {
-            // 連続効果の待機中であれば、クリックを「対象選択」として処理
-            if (window._midEffectTargetResolve) {
-                let rule = window._midEffectTargetRule;
-                if (rule === 'p') { uiShowMsg("プレイヤーを選んでください！", 1500); return; }
-                
-                uiShowMsg("対象を決定しました！", 1000);
-                let resolveFn = window._midEffectTargetResolve;
-                window._midEffectTargetResolve = null; // 待機状態を解除
-                resolveFn({ type: 'creature', uid: uid });
-                return; // 本来の攻撃などの処理をここでキャンセル
-            }
-            origBatClickCreature(uid, isCpuField);
-        };
-    }
-
-    // プレイヤークリックの監視
-    const origBatClickPlayer = window.batClickPlayer;
-    if (typeof window.batClickPlayer === 'function') {
-        window.batClickPlayer = function(isCpuField) {
-            // 連続効果の待機中であれば、クリックを「対象選択」として処理
-            if (window._midEffectTargetResolve) {
-                let rule = window._midEffectTargetRule;
-                if (rule === 'cr') { uiShowMsg("クリーチャーを選んでください！", 1500); return; }
-                
-                uiShowMsg("対象を決定しました！", 1000);
-                let resolveFn = window._midEffectTargetResolve;
-                window._midEffectTargetResolve = null;
-                resolveFn({ type: 'player', id: isCpuField ? 'cpu' : 'player' });
-                return;
-            }
-            origBatClickPlayer(isCpuField);
-        };
-    }
-}
-// 【effects.js の一番下に追記】
-// ▼ 連続効果のためのクリック強制割り込みシステム ▼
-if (!window._patchedForMultiTarget) {
-    window._patchedForMultiTarget = true;
-    
-    // true（キャプチャフェーズ）を指定することで、他のどんなクリック処理よりも先に発動させます
-    document.addEventListener('click', function(e) {
-        if (typeof window._midEffectTargetResolve === 'function') {
-            // クリックされた要素（またはその親）が onclick 属性を持っているか調べる
-            let el = e.target.closest('[onclick]');
-            if (!el) return;
-
-            let oc = el.getAttribute('onclick');
-
-            // フェイズ進行ボタンなどの場合は無視する
-            if (oc.includes('Phase') || oc.includes('Turn') || oc.includes('Action') || oc.includes('changeScreen')) {
-                return;
-            }
-
-            // --- ① クリーチャーがクリックされたか判定 ---
-            // onclick="〇〇〇(1234)" のように、カッコ内に数字(uid)が含まれているものをクリーチャーとみなす
-            let uidMatch = oc.match(/\(?(\d+)\)?/);
-            if (uidMatch) {
-                e.stopPropagation(); // 本来の攻撃などの処理をここでストップ
-                e.preventDefault();
-
-                let resolve = window._midEffectTargetResolve;
-                window._midEffectTargetResolve = null; // 待機状態を解除
-                uiShowMsg("対象を決定しました！", 1000);
-                resolve({ type: 'creature', uid: parseInt(uidMatch[1]) });
-                return;
-            }
-
-            // --- ② プレイヤーがクリックされたか判定 ---
-            if (oc.toLowerCase().includes('player') || oc.toLowerCase().includes('cpu') || el.id.includes('player') || el.id.includes('cpu')) {
-                e.stopPropagation();
-                e.preventDefault();
-
-                let isCpu = oc.toLowerCase().includes('cpu') || el.id.includes('cpu');
-                let resolve = window._midEffectTargetResolve;
-                window._midEffectTargetResolve = null;
-                uiShowMsg("対象を決定しました！", 1000);
-                resolve({ type: 'player', id: isCpu ? 'cpu' : 'player' });
-                return;
-            }
-            
-            // それ以外（背景など）をクリックした場合は警告を出す
-            e.stopPropagation();
-            uiShowMsg("正しい対象（クリーチャーかプレイヤー）をクリックしてください", 1500);
-        }
-    }, true);
-}

@@ -175,12 +175,27 @@ async function batPlayCard(uid) {
     } else {
         if(!batCanPayMana(card, BAT.player)) { uiShowMsg(`マナ（または ${ATTR_JP[card.color]} の色マナ）が足りません`); BAT.isProcessing = false; uiRenderBattle(); return; }
         
-        // ▼ 修正：呪文だけでなく、対象を取るETBを持つクリーチャーもターゲット選択フェイズへ移行させる ▼
         let isTargetingSpell = card.type === 'SPELL' && ['any', 'cr', 'p'].includes(card.effect.split('_')[1]);
         let isTargetingETB = card.type === 'CREATURE' && card.triggered && card.triggered.condition === 'etb' && ['any', 'cr', 'p'].includes(card.triggered.effect.split('_')[1]);
         
         if(isTargetingSpell || isTargetingETB) {
-            BAT.prevPhase = BAT.phase; BAT.phase = 'TARGETING'; BAT.pendingSpell = uid; BAT.isProcessing = false; uiRenderBattle(); uiShowMsg("対象を選択"); return;
+            BAT.prevPhase = BAT.phase; 
+            BAT.phase = 'TARGETING'; 
+            BAT.pendingSpell = uid; 
+            
+            // ▼ 追加：複数ターゲット用の準備 ▼
+            BAT.selectedTargets = []; // 選択したターゲットを入れる配列
+            BAT.requiredTargetCount = 1; // デフォルトは1
+            
+            let effectStr = isTargetingSpell ? card.effect : card.triggered.effect;
+            let parts = effectStr.split(',')[0].split('_'); // 最初の効果から取得
+            let count = parseInt(parts[4]); // 5番目の値が対象数
+            if (!isNaN(count) && count > 1) BAT.requiredTargetCount = count;
+
+            BAT.isProcessing = false; 
+            uiRenderBattle(); 
+            uiShowMsg(`対象を ${BAT.requiredTargetCount} 体選択してください`); 
+            return;
         }
         await batPayAndResolve(uid, null);
     }
@@ -188,32 +203,64 @@ async function batPlayCard(uid) {
 
 function batCancelTargeting() { BAT.phase = BAT.prevPhase; BAT.pendingSpell = null; BAT.pendingAbility = null; BAT.isProcessing = false; uiRenderBattle(); }
 
-// 【以下のコードで batSelectTarget 関数をまるごと上書きします】
-async function batSelectTarget(targetObj) {
-    if (BAT.phase !== 'TARGETING') return;
+// 【battle.js 置き換え箇所：batSelectTarget 関数】
 
-    // 既に選ばれている対象はスキップ（同じ対象を2回選べないようにする）
-    if (BAT.pendingTargets.some(t => t.type === targetObj.type && t.uid === targetObj.uid)) {
-        uiShowMsg("その対象は既に選ばれています");
+async function batSelectTarget(targetObj) {
+    if (BAT.phase !== 'TARGETING' || BAT.isProcessing) return;
+    
+    // ▼ 追加：複数ターゲットの処理 ▼
+    if (!BAT.selectedTargets) BAT.selectedTargets = [];
+    
+    // すでに選んだ対象を2回選ばないようにする（クリーチャーのみ）
+    if (targetObj.type === 'creature' && BAT.selectedTargets.some(t => t.type === 'creature' && t.uid === targetObj.uid)) {
+        uiShowMsg("その対象は既に選ばれています", 1000);
         return;
     }
-
-    BAT.pendingTargets.push(targetObj);
-    uiRenderBattle(); // 選択した対象に赤い線を引くために画面更新
-
-// 必要な対象数に達したかチェック
-    if (BAT.pendingTargets.length >= BAT.requiredTargetCount) {
-        let targets = [...BAT.pendingTargets];
-        BAT.pendingTargets = []; // リセット
-        BAT.phase = BAT.prevPhase;
+    
+    BAT.selectedTargets.push(targetObj);
+    
+    // まだ必要な数に達していない場合は待機
+    if (BAT.selectedTargets.length < (BAT.requiredTargetCount || 1)) {
+        uiShowMsg(`あと ${BAT.requiredTargetCount - BAT.selectedTargets.length} 体選んでください`, 0);
         
-        if (BAT.pendingSpell) {
-            batPayAndResolve(BAT.pendingSpell, targets); // ★ ここを書き換える
-        } else if (BAT.pendingAbility) {
-            batResolveAbility(BAT.pendingAbility, targets);
+        // 選択中のクリーチャーを光らせる（視覚効果）
+        if (targetObj.type === 'creature') {
+            let el = document.getElementById('cr-' + targetObj.uid);
+            if (el) el.style.boxShadow = '0 0 10px 5px #e03131';
         }
-    } else {
-        uiShowMsg(`あと ${BAT.requiredTargetCount - BAT.pendingTargets.length} 体選んでください`, 2000);
+        return; // ここで止めて次のクリックを待つ
+    }
+    
+    // ▼ 必要な数に達したら解決へ進む ▼
+    BAT.isProcessing = true; uiRenderBattle();
+
+    // 選択中の光を消す
+    BAT.selectedTargets.forEach(t => {
+        if (t.type === 'creature') {
+            let el = document.getElementById('cr-' + t.uid);
+            if (el) el.style.boxShadow = '';
+        }
+    });
+
+    let finalTargets = [...BAT.selectedTargets]; // 配列をコピー
+
+    try {
+        if (BAT.pendingSpell) {
+            // 単体ではなく「配列」を渡す
+            await batPayAndResolve(BAT.pendingSpell, finalTargets, false);
+        } else if (BAT.pendingAbility) {
+            await batResolveAbility(BAT.pendingAbility, finalTargets, false);
+        }
+    } catch (e) {
+        console.error("ターゲット解決中にエラーが発生しました:", e);
+        uiShowMsg("エラー発生: 処理を中断します");
+    }
+    
+    if (BAT.phase === 'TARGETING') {
+        BAT.phase = BAT.prevPhase;
+        BAT.pendingSpell = null;
+        BAT.pendingAbility = null;
+        BAT.selectedTargets = []; // リセット
     }
 }
 
@@ -222,14 +269,28 @@ async function batSelectTarget(targetObj) {
 async function batPayAndResolve(uid, targetObj, isCpuCast = false) {
     let playerObj = isCpuCast ? BAT.cpu : BAT.player; let oppObj = isCpuCast ? BAT.player : BAT.cpu;
     let handIdx = playerObj.hand.findIndex(c => c.uid === uid); 
-    if (handIdx === -1) return; // エラー防止
+    if (handIdx === -1) return; 
     let card = playerObj.hand[handIdx];
 
     if(card.type !== 'LAND') {
-        await uiShowCastSequence(card, targetObj);
+        // ▼ 修正：ターゲットが配列なら、すべてに赤い線を引く ▼
+        let targetList = Array.isArray(targetObj) ? targetObj : (targetObj ? [targetObj] : []);
+        
+        if (targetList.length > 0) {
+            targetList.forEach(tgt => {
+                // ※ uiShowCastSequence が配列に対応していない場合は、個別に線を引くなどの対応が必要です。
+                // 既存のコードの仕様上、ここはそのまま実行するか、ループ内で線を引きます。
+                if (typeof uiShowCastSequence === 'function') {
+                    uiShowCastSequence(card, tgt); 
+                }
+            });
+            await sleep(600); // 線の表示を少し待つ
+        } else {
+            // ターゲットがない魔法の場合
+            if (typeof uiShowCastSequence === 'function') await uiShowCastSequence(card, null);
+        }
     }
     
-    // ▼ 修正：バグを防ぐため、効果を発動する「前」に手札から消す ▼
     playerObj.hand.splice(handIdx, 1); 
     
     if(card.type === 'LAND') { 
@@ -241,6 +302,7 @@ async function batPayAndResolve(uid, targetObj, isCpuCast = false) {
             card.sickness = !card.haste; playerObj.creatures.push(card); uiRenderBattle(); await sleep(300);
             await AbilityManager.triggerETB(card, playerObj, oppObj, targetObj); 
         } else if(card.type === 'SPELL') { 
+            // ターゲット（配列）をそのまま MagicEngine に渡す
             await MagicEngine.resolve(card.effect, playerObj, oppObj, targetObj); 
         }
     }
